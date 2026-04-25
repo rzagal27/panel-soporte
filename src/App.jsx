@@ -16,10 +16,10 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
 const SPECIALISTS = [
-  { id: "spec1", name: "Ana Martínez", role: "Especialista de Soporte", avatar: "AM", color: "#2D6A4F", managers: ["Gerente P. 1", "Gerente P. 2"] },
-  { id: "spec2", name: "Carlos Rojas", role: "Especialista de Soporte", avatar: "CR", color: "#1B4F72", managers: ["Gerente P. 3", "Gerente P. 4"] },
-  { id: "spec3", name: "Valentina Torres", role: "Especialista de Soporte", avatar: "VT", color: "#6B2D8B", managers: ["Gerente P. 5", "Gerente P. 6"] },
-  { id: "spec4", name: "Diego Fuentes", role: "Especialista de Soporte", avatar: "DF", color: "#7D3C0A", managers: ["Gerente P. 7", "Gerente P. 8"] },
+  { id: "spec1", name: "Rolando Zagal", role: "Especialista de Soporte", avatar: "RZ", color: "#2D6A4F", managers: ["Juan Nahuel", "Raúl Dote"] },
+  { id: "spec2", name: "Malena Espinoza", role: "Especialista de Soporte", avatar: "ME", color: "#1B4F72", managers: ["Edgar Solís", "Ricardo Orellana"] },
+  { id: "spec3", name: "Vicente García", role: "Especialista de Soporte", avatar: "VG", color: "#6B2D8B", managers: ["Alan Miranda", "Juan Palma"] },
+  { id: "spec4", name: "Josué Naranjo", role: "Especialista de Soporte", avatar: "JN", color: "#7D3C0A", managers: ["José Reyes", "Patricio Toloza"] },
 ];
 
 const TOPICS = ["Arriendo", "Mantención", "Cobranza", "Reportes", "Propietarios", "Legal", "Otro"];
