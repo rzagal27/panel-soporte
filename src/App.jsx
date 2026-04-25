@@ -46,7 +46,7 @@ async function uploadToCloudinary(file) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", CLOUDINARY_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/raw/upload`, {
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/auto/upload`, {
     method: "POST", body: formData,
   });
   const data = await res.json();
@@ -116,6 +116,24 @@ function ContractorPage({ quoteId }) {
         <div style={{ fontSize: 22, fontWeight: "bold", color: "#1A1A2E", marginBottom: 4 }}>Cita N° {quote.numero_cita}</div>
         <div style={{ fontSize: 14, color: "#666", marginBottom: 8 }}>{quote.descripcion}</div>
 
+        {/* Itemizado */}
+        {quote.items?.length > 0 && (
+          <div style={{ marginBottom: 20, borderRadius: 10, border: "1px solid #EEE", overflow: "hidden" }}>
+            <div style={{ background: "#1A1A2E", padding: "8px 14px", display: "grid", gridTemplateColumns: "3fr 1fr 1fr", gap: 8 }}>
+              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: "bold" }}>Descripción</div>
+              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: "bold" }}>Cantidad</div>
+              <div style={{ fontSize: 11, color: "#C9A84C", fontWeight: "bold" }}>Unidad</div>
+            </div>
+            {quote.items.map((item, i) => (
+              <div key={i} style={{ padding: "8px 14px", display: "grid", gridTemplateColumns: "3fr 1fr 1fr", gap: 8, background: i % 2 === 0 ? "white" : "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
+                <div style={{ fontSize: 13, color: "#333" }}>{item.descripcion}</div>
+                <div style={{ fontSize: 13, color: "#555", textAlign: "center" }}>{item.cantidad}</div>
+                <div style={{ fontSize: 13, color: "#555" }}>{item.unidad}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Archivos adjuntos del solicitante */}
         {quote.archivos_referencia?.length > 0 && (
           <div style={{ marginBottom: 20, padding: 14, background: "#F9F9F9", borderRadius: 10, border: "1px solid #EEE" }}>
@@ -181,10 +199,13 @@ function CenteredCard({ icon, title, subtitle, color }) {
 }
 
 // ── MÓDULO DE COTIZACIONES ───────────────────────────────────────────────────
+const UNIDADES = ["un", "m²", "m³", "ml", "gl", "kg", "ton", "hr", "día", "mes"];
+
 function QuotesModule() {
   const [quotes, setQuotes] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [newQuote, setNewQuote] = useState({ numero_cita: "", descripcion: "" });
+  const [items, setItems] = useState([{ descripcion: "", cantidad: "", unidad: "un" }]);
   const [refFiles, setRefFiles] = useState([]);
   const [uploadingRef, setUploadingRef] = useState(false);
   const [activeTab, setActiveTab] = useState("activas");
@@ -203,14 +224,22 @@ function QuotesModule() {
     return () => unsub();
   }, []);
 
+  const addItem = () => setItems([...items, { descripcion: "", cantidad: "", unidad: "un" }]);
+  const removeItem = (i) => setItems(items.filter((_, idx) => idx !== i));
+  const updateItem = (i, field, value) => setItems(items.map((it, idx) => idx === i ? { ...it, [field]: value } : it));
+
   const createQuote = async () => {
-    if (!newQuote.numero_cita.trim() || !newQuote.descripcion.trim()) return;
+    if (!newQuote.numero_cita.trim()) return alert("Ingresa el número de cita.");
+    const validItems = items.filter((it) => it.descripcion.trim());
+    if (validItems.length === 0) return alert("Agrega al menos un ítem.");
     setUploadingRef(true);
     try {
       let urls = [];
       for (const f of refFiles) urls.push(await uploadToCloudinary(f));
       await addDoc(collection(db, "cotizaciones"), {
-        ...newQuote,
+        numero_cita: newQuote.numero_cita,
+        descripcion: newQuote.descripcion,
+        items: validItems,
         estado: "pendiente",
         ofertas: [],
         archivos_referencia: urls,
@@ -218,6 +247,7 @@ function QuotesModule() {
         createdAtDisplay: new Date().toLocaleDateString("es-CL"),
       });
       setNewQuote({ numero_cita: "", descripcion: "" });
+      setItems([{ descripcion: "", cantidad: "", unidad: "un" }]);
       setRefFiles([]);
       setShowForm(false);
     } catch (e) { alert("Error al crear la solicitud."); }
@@ -335,16 +365,55 @@ function QuotesModule() {
         </button>
       </div>
 
-      {/* Formulario */}
       {showForm && (
         <div style={{ background: "white", borderRadius: 14, padding: 24, marginBottom: 20, border: "2px solid #C9A84C", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
           <div style={{ fontSize: 14, fontWeight: "bold", color: "#1A1A2E", marginBottom: 16 }}>Nueva Solicitud de Cotización</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12, marginBottom: 14 }}>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12, marginBottom: 16 }}>
             <input placeholder="N° de cita *" value={newQuote.numero_cita} onChange={(e) => setNewQuote({ ...newQuote, numero_cita: e.target.value })}
               style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
-            <input placeholder="Descripción del trabajo *" value={newQuote.descripcion} onChange={(e) => setNewQuote({ ...newQuote, descripcion: e.target.value })}
+            <input placeholder="Título o descripción general (opcional)" value={newQuote.descripcion} onChange={(e) => setNewQuote({ ...newQuote, descripcion: e.target.value })}
               style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
           </div>
+
+          {/* Itemizado */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: "bold", color: "#555", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>📋 Ítems del trabajo</span>
+              <button onClick={addItem}
+                style={{ background: "#1A1A2E", color: "white", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer" }}>
+                + Agregar ítem
+              </button>
+            </div>
+
+            {/* Encabezado */}
+            <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 32px", gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: "#AAA", paddingLeft: 4 }}>Descripción</div>
+              <div style={{ fontSize: 11, color: "#AAA" }}>Cantidad</div>
+              <div style={{ fontSize: 11, color: "#AAA" }}>Unidad</div>
+              <div />
+            </div>
+
+            {items.map((item, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 32px", gap: 8, marginBottom: 8 }}>
+                <input placeholder={`Ítem ${i + 1}: ej. Reparación de cielo`} value={item.descripcion}
+                  onChange={(e) => updateItem(i, "descripcion", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
+                <input type="number" placeholder="0" value={item.cantidad}
+                  onChange={(e) => updateItem(i, "cantidad", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, textAlign: "center" }} />
+                <select value={item.unidad} onChange={(e) => updateItem(i, "unidad", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13 }}>
+                  {UNIDADES.map((u) => <option key={u}>{u}</option>)}
+                </select>
+                {items.length > 1 ? (
+                  <button onClick={() => removeItem(i)}
+                    style={{ background: "none", border: "none", color: "#CCC", cursor: "pointer", fontSize: 18, padding: 0 }}>×</button>
+                ) : <div />}
+              </div>
+            ))}
+          </div>
+
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>📎 Adjuntar imágenes o archivos de referencia (opcional)</label>
             <input type="file" multiple accept="image/*,.pdf,.xlsx,.xls"
@@ -356,6 +425,7 @@ function QuotesModule() {
               </div>
             )}
           </div>
+
           <button onClick={createQuote} disabled={uploadingRef}
             style={{ background: "#C9A84C", color: "white", border: "none", borderRadius: 8, padding: "9px 24px", fontSize: 13, cursor: uploadingRef ? "not-allowed" : "pointer", fontWeight: "bold", opacity: uploadingRef ? 0.7 : 1 }}>
             {uploadingRef ? "Subiendo archivos..." : "Crear y generar link"}
@@ -397,6 +467,16 @@ function QuotesModule() {
                     </span>
                   </div>
                   <div style={{ fontSize: 13, color: "#555" }}>{quote.descripcion}</div>
+                  {quote.items?.length > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#888" }}>
+                      {quote.items.slice(0, 3).map((it, i) => (
+                        <span key={i} style={{ display: "inline-block", background: "#F5F5F5", borderRadius: 4, padding: "2px 8px", marginRight: 4, marginBottom: 4 }}>
+                          {it.descripcion} · {it.cantidad} {it.unidad}
+                        </span>
+                      ))}
+                      {quote.items.length > 3 && <span style={{ color: "#AAA" }}>+{quote.items.length - 3} más</span>}
+                    </div>
+                  )}
                   {quote.archivos_referencia?.length > 0 && (
                     <div style={{ marginTop: 4 }}>
                       {quote.archivos_referencia.map((url, i) => (
@@ -449,10 +529,10 @@ function QuotesModule() {
                           {offer.notas && <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{offer.notas}</div>}
                           <div style={{ fontSize: 10, color: "#CCC", marginTop: 2 }}>{offer.email} · {offer.fecha}</div>
                           {offer.archivo_url && (
-                            <a href={offer.archivo_url} download target="_blank" rel="noreferrer"
-  style={{ fontSize: 11, color: "#1B4F72", textDecoration: "underline", marginTop: 2, display: "block" }}>
-  📥 Descargar cotización
-</a>
+                            <a href={offer.archivo_url} target="_blank" rel="noreferrer"
+                              style={{ fontSize: 11, color: "#1B4F72", textDecoration: "underline", marginTop: 2, display: "block" }}>
+                              📄 Ver cotización adjunta
+                            </a>
                           )}
                         </div>
                         {/* Botones solo si está pendiente */}
