@@ -449,10 +449,10 @@ function QuotesModule() {
                           {offer.notas && <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{offer.notas}</div>}
                           <div style={{ fontSize: 10, color: "#CCC", marginTop: 2 }}>{offer.email} · {offer.fecha}</div>
                           {offer.archivo_url && (
-                            <a href={offer.archivo_url} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 11, color: "#1B4F72", textDecoration: "underline", marginTop: 2, display: "block" }}>
-                              📄 Ver cotización adjunta
-                            </a>
+                            <a href={offer.archivo_url} download target="_blank" rel="noreferrer"
+  style={{ fontSize: 11, color: "#1B4F72", textDecoration: "underline", marginTop: 2, display: "block" }}>
+  📥 Descargar cotización
+</a>
                           )}
                         </div>
                         {/* Botones solo si está pendiente */}
