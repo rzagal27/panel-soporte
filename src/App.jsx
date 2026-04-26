@@ -787,49 +787,82 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-              {PRIORITIES.map((priority) => {
-                const pc = PRIORITY_CONFIG[priority];
-                const priorityTasks = getTasksByPriority(selectedSpec.id, selectedCategory, priority);
-                const isDragOver = dragOverPriority === priority;
-                return (
-                  <div key={priority}
-                    onDragOver={(e) => { e.preventDefault(); setDragOverPriority(priority); }}
-                    onDragLeave={() => setDragOverPriority(null)}
-                    onDrop={async (e) => { e.preventDefault(); if (draggedTask && draggedTask.priority !== priority) await updateDoc(doc(db, `tasks_${selectedSpec.id}`, draggedTask.id), { priority }); setDraggedTask(null); setDragOverPriority(null); }}
-                    style={{ background: isDragOver ? pc.bg : "white", border: `2px solid ${isDragOver ? pc.color : pc.border}`, borderRadius: 12, overflow: "hidden", transition: "all 0.15s" }}>
-                    <div style={{ padding: "9px 14px", background: pc.bg, borderBottom: `1px solid ${pc.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontWeight: "bold", fontSize: 12, color: pc.color }}>{pc.label}</span>
-                      <span style={{ background: pc.color, color: "white", borderRadius: 10, padding: "1px 7px", fontSize: 10 }}>{priorityTasks.length}</span>
-                    </div>
-                    <div style={{ padding: "8px 10px", minHeight: 44, display: "flex", flexDirection: "column", gap: 7 }}>
-                      {priorityTasks.length === 0 ? (
-                        <div style={{ color: "#CCC", fontSize: 11, textAlign: "center", padding: "6px 0", fontStyle: "italic" }}>Sin tareas · Arrastra aquí para cambiar prioridad</div>
-                      ) : priorityTasks.map((task) => {
-                        const done = task.status === "Completada";
-                        return (
-                          <div key={task.id} draggable onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }} onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
-                            style={{ background: done ? "#F9F9F9" : "white", border: "1px solid #EEE", borderRadius: 8, padding: "9px 12px", display: "flex", alignItems: "flex-start", gap: 9, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.4 : done ? 0.6 : 1, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-                            <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
-                              style={{ width: 17, height: 17, borderRadius: "50%", border: `2px solid ${done ? "#27AE60" : "#CCC"}`, background: done ? "#27AE60" : "white", cursor: "pointer", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>
-                              {done && "✓"}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", background: "white", borderRadius: 0 }}>
+              {/* Lista unificada con separadores por prioridad */}
+              {selectedCategory === "cat_fixed_completado" ? (
+                // Vista especial para Completado
+                <div>
+                  {getSpecTasks(selectedSpec.id).filter((t) => t.categoryId === "cat_fixed_completado").length === 0 ? (
+                    <div style={{ color: "#CCC", fontSize: 13, textAlign: "center", padding: "40px 0", fontStyle: "italic" }}>No hay tareas completadas aún</div>
+                  ) : (
+                    getSpecTasks(selectedSpec.id)
+                      .filter((t) => t.categoryId === "cat_fixed_completado")
+                      .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))
+                      .map((task) => (
+                        <div key={task.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 4px", borderBottom: "1px solid #F5F5F5" }}>
+                          <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
+                            style={{ width: 17, height: 17, borderRadius: "50%", border: "2px solid #27AE60", background: "#27AE60", cursor: "pointer", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>
+                            ✓
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, color: "#888", textDecoration: "line-through", marginBottom: 2 }}>{task.title}</div>
+                            {task.notes && <div style={{ fontSize: 11, color: "#BBB", marginBottom: 2 }}>{task.notes}</div>}
+                            <div style={{ fontSize: 10, color: "#CCC" }}>
+                              {task.assignedBy && `Por: ${task.assignedBy} · `}
+                              <span style={{ color: "#27AE60" }}>✓ {task.completedAtDisplay}</span>
                             </div>
+                          </div>
+                          <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EEE", fontSize: 15, padding: 0 }}>×</button>
+                        </div>
+                      ))
+                  )}
+                </div>
+              ) : (
+                // Vista normal con separadores por prioridad
+                <div>
+                  {PRIORITIES.map((priority, idx) => {
+                    const pc = PRIORITY_CONFIG[priority];
+                    const priorityTasks = getTasksByPriority(selectedSpec.id, selectedCategory, priority);
+                    const isDragOver = dragOverPriority === priority;
+                    return (
+                      <div key={priority}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverPriority(priority); }}
+                        onDragLeave={() => setDragOverPriority(null)}
+                        onDrop={async (e) => { e.preventDefault(); if (draggedTask && draggedTask.priority !== priority) await updateDoc(doc(db, `tasks_${selectedSpec.id}`, draggedTask.id), { priority }); setDraggedTask(null); setDragOverPriority(null); }}
+                      >
+                        {/* Separador de prioridad */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", marginTop: idx > 0 ? 8 : 0, background: isDragOver ? pc.bg : "transparent", borderRadius: 6, transition: "background 0.15s", paddingLeft: isDragOver ? 8 : 0 }}>
+                          <div style={{ width: 3, height: 16, borderRadius: 2, background: pc.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, fontWeight: "bold", color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>{pc.label}</span>
+                          <div style={{ flex: 1, height: 1, background: "#EBEBEB" }} />
+                          <span style={{ fontSize: 10, color: "#AAA" }}>{priorityTasks.length}</span>
+                        </div>
+
+                        {/* Tareas */}
+                        {priorityTasks.length === 0 ? (
+                          <div style={{ color: "#DDD", fontSize: 11, padding: "6px 12px 10px", fontStyle: "italic" }}>
+                            Sin tareas — arrastra aquí para cambiar prioridad
+                          </div>
+                        ) : priorityTasks.map((task) => (
+                          <div key={task.id} draggable
+                            onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }}
+                            onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
+                            style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 4px 9px 12px", borderBottom: "1px solid #F8F8F8", cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.15s", borderLeft: `3px solid ${pc.color}22`, marginBottom: 1 }}>
+                            <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
+                              style={{ width: 17, height: 17, borderRadius: "50%", border: `2px solid #CCC`, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: "bold", fontSize: 13, color: "#1A1A2E", textDecoration: done ? "line-through" : "none", marginBottom: 2 }}>{task.title}</div>
+                              <div style={{ fontWeight: "bold", fontSize: 13, color: "#1A1A2E", marginBottom: 2 }}>{task.title}</div>
                               {task.notes && <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>{task.notes}</div>}
-                              <div style={{ fontSize: 10, color: "#CCC" }}>
-                                {task.assignedBy && `Por: ${task.assignedBy} · `}{task.createdAtDisplay}
-                                {task.completedAtDisplay && <span style={{ color: "#27AE60", marginLeft: 6 }}>✓ Completado: {task.completedAtDisplay}</span>}
-                              </div>
+                              <div style={{ fontSize: 10, color: "#CCC" }}>{task.assignedBy && `Por: ${task.assignedBy} · `}{task.createdAtDisplay}</div>
                             </div>
                             <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#DDD", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
