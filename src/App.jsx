@@ -35,9 +35,25 @@ const SPECIALISTS = [
 
 const PRIORITIES = ["Alta", "Media", "Baja"];
 const PRIORITY_CONFIG = {
-  Alta: { color: "#E74C3C", bg: "#FFF0F0", border: "#FFCDD2", label: "🔴 Prioridad Alta" },
-  Media: { color: "#E67E22", bg: "#FFF8F0", border: "#FFE0B2", label: "🟡 Prioridad Media" },
-  Baja: { color: "#27AE60", bg: "#F0FFF4", border: "#C8E6C9", label: "🟢 Prioridad Baja" },
+  Alta: { color: "#D13438", bg: "#FDF3F3", border: "#F4ABAB", label: "Alta" },
+  Media: { color: "#CA5010", bg: "#FDF6F0", border: "#F4C79A", label: "Media" },
+  Baja: { color: "#107C10", bg: "#F1FAF1", border: "#9FD89F", label: "Baja" },
+};
+
+// To Do color palette
+const TODO = {
+  blue: "#2564CF",
+  blueLight: "#EEF3FB",
+  blueBorder: "#C7D8F5",
+  sidebar: "#F3F2F1",
+  sidebarHover: "#E8E8E8",
+  sidebarActive: "#DDEEFF",
+  text: "#1F1F1F",
+  textMuted: "#605E5C",
+  textLight: "#A19F9D",
+  border: "#EDEBE9",
+  white: "#FFFFFF",
+  bg: "#FAF9F8",
 };
 const DEFAULT_CATEGORIES = ["General", "En proceso", "Pendiente revisión", "Completado"];
 
@@ -670,54 +686,56 @@ export default function App() {
     setSelectedCategory(rem[0]?.id || null);
   };
 
-  if (loading) return <CenteredMsg msg="Cargando panel..." />;
+  if (loading) return <CenteredMsg msg="Cargando..." />;
 
   const currentCatName = selectedSpec ? getSpecCategories(selectedSpec.id).find((c) => c.id === selectedCategory)?.name || "" : "";
+  const TD = {
+    blue: "#2564CF", blueHover: "#1A52B3", sidebar: "#F3F2F1",
+    sidebarActive: "#E3EEFB", sidebarHover: "#EAEAEA",
+    text: "#1F1F1F", muted: "#605E5C", light: "#A19F9D",
+    border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
+  };
 
   return (
-    <div style={{ fontFamily: "'Georgia', serif", background: "#F5F4F0", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Header */}
-      <div style={{ background: "#1A1A2E", color: "white", padding: "14px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "3px solid #C9A84C", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {selectedSpec && activeModule === "tareas" && (
-            <button onClick={() => { setSelectedSpec(null); setSelectedCategory(null); setShowForm(false); }}
-              style={{ background: "none", border: "1px solid #444", color: "#AAA", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 12 }}>← Volver</button>
-          )}
-          <div>
-            <div style={{ fontSize: 9, letterSpacing: 4, color: "#C9A84C", textTransform: "uppercase" }}>Panel de Gestión</div>
-            <div style={{ fontSize: 18, fontWeight: "bold" }}>
-              {activeModule === "cotizaciones" ? "Cotizaciones" : selectedSpec ? selectedSpec.name : "Equipo de Soporte"}
-            </div>
+    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: TD.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+      {/* Top bar - To Do style */}
+      <div style={{ background: TD.white, borderBottom: `1px solid ${TD.border}`, padding: "0 24px", display: "flex", alignItems: "center", height: 48, flexShrink: 0, gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: TD.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ color: "white", fontSize: 14 }}>✓</span>
           </div>
+          <span style={{ fontWeight: 600, fontSize: 15, color: TD.text }}>Panel de Soporte</span>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["tareas", "cotizaciones"].map((mod) => (
-            <button key={mod} onClick={() => { setActiveModule(mod); if (mod === "cotizaciones") setSelectedSpec(null); }}
-              style={{ padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif", background: activeModule === mod ? "#C9A84C" : "#2A2A3E", color: activeModule === mod ? "white" : "#888" }}>
-              {mod === "tareas" ? "📋 Tareas" : "📄 Cotizaciones"}
-            </button>
-          ))}
-        </div>
+        <div style={{ flex: 1 }} />
+        {["tareas", "cotizaciones"].map((mod) => (
+          <button key={mod} onClick={() => { setActiveModule(mod); if (mod === "cotizaciones") setSelectedSpec(null); }}
+            style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? TD.sidebarActive : "transparent", color: activeModule === mod ? TD.blue : TD.muted, fontWeight: activeModule === mod ? 600 : 400, transition: "all 0.1s" }}>
+            {mod === "tareas" ? "Tareas" : "Cotizaciones"}
+          </button>
+        ))}
       </div>
 
       {activeModule === "cotizaciones" ? <QuotesModule /> : !selectedSpec ? (
-        <div style={{ flex: 1, overflowY: "auto", padding: "32px" }}>
-          <div style={{ fontSize: 11, color: "#888", marginBottom: 24, letterSpacing: 3, textTransform: "uppercase" }}>Selecciona un especialista</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20, maxWidth: 1100 }}>
+        // Grid especialistas - To Do style
+        <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
+          <div style={{ fontSize: 12, color: TD.light, marginBottom: 20, fontWeight: 500 }}>ESPECIALISTAS DE SOPORTE</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, maxWidth: 1000 }}>
             {SPECIALISTS.map((spec) => {
               const pending = pendingCount(spec.id), total = getSpecTasks(spec.id).length;
               return (
                 <div key={spec.id} onClick={() => { setSelectedSpec(spec); setSelectedCategory(null); }}
-                  style={{ background: "white", borderRadius: 16, padding: "28px 22px", cursor: "pointer", border: "2px solid transparent", boxShadow: "0 2px 12px rgba(0,0,0,0.07)", textAlign: "center", transition: "all 0.2s" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = spec.color; e.currentTarget.style.transform = "translateY(-3px)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                  <div style={{ width: 68, height: 68, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: "bold", margin: "0 auto 14px" }}>{spec.avatar}</div>
-                  <div style={{ fontWeight: "bold", fontSize: 16, color: "#1A1A2E", marginBottom: 3 }}>{spec.name}</div>
-                  <div style={{ fontSize: 11, color: "#888", marginBottom: 14 }}>{spec.role}</div>
-                  <div style={{ marginBottom: 14 }}>{spec.managers.map((m) => <span key={m} style={{ display: "inline-block", background: "#F0EDE8", borderRadius: 20, padding: "2px 9px", fontSize: 10, color: "#555", margin: 2 }}>{m}</span>)}</div>
-                  <div style={{ background: pending > 0 ? "#FEF0F0" : "#F0FEF4", borderRadius: 12, padding: "7px 14px", display: "inline-block" }}>
-                    <span style={{ fontWeight: "bold", fontSize: 18, color: pending > 0 ? "#E74C3C" : "#27AE60" }}>{pending}</span>
-                    <span style={{ fontSize: 11, color: "#888", marginLeft: 5 }}>pendiente{pending !== 1 ? "s" : ""} / {total} total</span>
+                  style={{ background: TD.white, borderRadius: 8, padding: "20px 18px", cursor: "pointer", border: `1px solid ${TD.border}`, transition: "all 0.15s", textAlign: "center" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = TD.blue; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = TD.border; }}>
+                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, margin: "0 auto 12px" }}>{spec.avatar}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: TD.text, marginBottom: 2 }}>{spec.name}</div>
+                  <div style={{ fontSize: 11, color: TD.light, marginBottom: 10 }}>{spec.role}</div>
+                  <div style={{ marginBottom: 12 }}>{spec.managers.map((m) => <span key={m} style={{ display: "inline-block", background: TD.sidebarActive, color: TD.blue, borderRadius: 3, padding: "1px 7px", fontSize: 10, margin: 2, fontWeight: 500 }}>{m}</span>)}</div>
+                  <div style={{ fontSize: 12, color: pending > 0 ? TD.blue : TD.light }}>
+                    <span style={{ fontWeight: 700, fontSize: 18 }}>{pending}</span>
+                    <span style={{ marginLeft: 4 }}>pendiente{pending !== 1 ? "s" : ""}</span>
+                    <span style={{ color: TD.light }}> / {total} total</span>
                   </div>
                 </div>
               );
@@ -726,99 +744,125 @@ export default function App() {
         </div>
       ) : (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {/* Sidebar */}
-          <div style={{ width: 210, background: "#1A1A2E", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-            <div style={{ padding: "16px 14px 8px", fontSize: 9, letterSpacing: 3, color: "#C9A84C", textTransform: "uppercase" }}>Categorías</div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
+
+          {/* Sidebar - To Do style */}
+          <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+            {/* Especialista header */}
+            <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${TD.border}` }}>
+              <button onClick={() => { setSelectedSpec(null); setSelectedCategory(null); setShowForm(false); }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: TD.blue, fontSize: 12, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
+                ← Volver
+              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: selectedSpec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{selectedSpec.avatar}</div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: TD.text }}>{selectedSpec.name}</div>
+                  <div style={{ fontSize: 11, color: TD.light }}>{selectedSpec.managers.join(" · ")}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Listas/Categorías */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
               {getSpecCategories(selectedSpec.id).map((cat) => {
                 const count = getSpecTasks(selectedSpec.id).filter((t) => t.categoryId === cat.id && t.status !== "Completada").length;
                 const isActive = selectedCategory === cat.id;
                 return (
                   <div key={cat.id} onClick={() => setSelectedCategory(cat.id)}
-                    style={{ padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", background: isActive ? "#2D2D50" : "transparent", borderLeft: isActive ? `3px solid ${selectedSpec.color}` : "3px solid transparent", transition: "all 0.12s" }}
-                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "#22223A"; }}
+                    style={{ padding: "8px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: isActive ? TD.sidebarActive : "transparent", borderRadius: "0 4px 4px 0", marginRight: 8, transition: "background 0.1s" }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-                    <span style={{ color: isActive ? "white" : "#888", fontSize: 13, flex: 1 }}>{cat.name}{cat.fixed && <span style={{ fontSize: 9, color: "#C9A84C", marginLeft: 4 }}>●</span>}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {count > 0 && <span style={{ background: selectedSpec.color, color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: "bold" }}>{count}</span>}
-                      {isActive && !cat.fixed && <span onClick={(e) => { e.stopPropagation(); deleteCategory(selectedSpec.id, cat.id); }} style={{ color: "#555", cursor: "pointer", fontSize: 14 }}>×</span>}
-                    </div>
+                    <span style={{ fontSize: 14 }}>{cat.id === "cat_fixed_completado" ? "✓" : "☰"}</span>
+                    <span style={{ flex: 1, fontSize: 13, color: isActive ? TD.blue : TD.text, fontWeight: isActive ? 600 : 400 }}>{cat.name}</span>
+                    {count > 0 && <span style={{ fontSize: 11, color: isActive ? TD.blue : TD.muted, fontWeight: 500 }}>{count}</span>}
+                    {isActive && !cat.fixed && (
+                      <span onClick={(e) => { e.stopPropagation(); deleteCategory(selectedSpec.id, cat.id); }}
+                        style={{ color: TD.light, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</span>
+                    )}
                   </div>
                 );
               })}
             </div>
-            <div style={{ padding: "10px 12px", borderTop: "1px solid #2A2A3E" }}>
+
+            {/* Nueva lista */}
+            <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
               {showCategoryInput ? (
                 <div>
                   <input autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") addCategory(); if (e.key === "Escape") setShowCategoryInput(false); }}
-                    placeholder="Nombre..." style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #444", background: "#2A2A3E", color: "white", fontSize: 12, fontFamily: "Georgia, serif", boxSizing: "border-box" }} />
+                    placeholder="Nombre de la lista..."
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <button onClick={addCategory} style={{ flex: 1, background: selectedSpec.color, color: "white", border: "none", borderRadius: 6, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
-                    <button onClick={() => setShowCategoryInput(false)} style={{ flex: 1, background: "#333", color: "#AAA", border: "none", borderRadius: 6, padding: "5px", fontSize: 11, cursor: "pointer" }}>✕</button>
+                    <button onClick={addCategory} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
+                    <button onClick={() => setShowCategoryInput(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setShowCategoryInput(true)} style={{ width: "100%", background: "none", border: "1px dashed #333", color: "#666", borderRadius: 8, padding: "7px", fontSize: 11, cursor: "pointer", fontFamily: "Georgia, serif" }}>+ Nueva categoría</button>
+                <button onClick={() => setShowCategoryInput(true)}
+                  style={{ width: "100%", background: "none", border: "none", color: TD.muted, borderRadius: 4, padding: "7px 4px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8, textAlign: "left" }}>
+                  <span style={{ fontSize: 16, color: TD.blue }}>+</span> Nueva lista
+                </button>
               )}
             </div>
           </div>
 
-          {/* Panel central */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-            <div style={{ padding: "12px 20px", background: "white", borderBottom: "1px solid #EEE", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-              <span style={{ fontWeight: "bold", fontSize: 15, color: "#1A1A2E" }}>{currentCatName}</span>
-              <button onClick={() => setShowForm(!showForm)} style={{ background: "#1A1A2E", color: "white", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 12, cursor: "pointer", fontFamily: "Georgia, serif" }}>
-                {showForm ? "Cancelar" : "+ Agregar Tarea"}
-              </button>
-            </div>
-            {showForm && (
-              <div style={{ padding: "12px 20px", background: "#FFFDF5", borderBottom: "2px solid #C9A84C", flexShrink: 0 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <input placeholder="Título *" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") addTask(); }} style={{ padding: "7px 11px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
-                  <select value={newTask.priority} onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })} style={{ padding: "7px 11px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13 }}>
-                    {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
-                  </select>
-                  <input placeholder="Asignado por" value={newTask.assignedBy} onChange={(e) => setNewTask({ ...newTask, assignedBy: e.target.value })} style={{ padding: "7px 11px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input placeholder="Notas..." value={newTask.notes} onChange={(e) => setNewTask({ ...newTask, notes: e.target.value })} style={{ flex: 1, padding: "7px 11px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
-                  <button onClick={addTask} style={{ background: "#C9A84C", color: "white", border: "none", borderRadius: 7, padding: "7px 20px", fontSize: 13, cursor: "pointer", fontWeight: "bold" }}>Guardar</button>
-                </div>
-              </div>
-            )}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", background: "white", borderRadius: 0 }}>
-              {/* Lista unificada con separadores por prioridad */}
-              {selectedCategory === "cat_fixed_completado" ? (
-                // Vista especial para Completado
-                <div>
-                  {getSpecTasks(selectedSpec.id).filter((t) => t.categoryId === "cat_fixed_completado").length === 0 ? (
-                    <div style={{ color: "#CCC", fontSize: 13, textAlign: "center", padding: "40px 0", fontStyle: "italic" }}>No hay tareas completadas aún</div>
+          {/* Panel central - To Do style */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
+
+            {/* Header lista */}
+            <div style={{ padding: "20px 28px 0" }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, marginBottom: 16 }}>{currentCatName}</div>
+
+              {/* Agregar tarea - To Do style */}
+              {selectedCategory !== "cat_fixed_completado" && (
+                <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: TD.blue, fontSize: 18, fontWeight: 300, cursor: "pointer" }} onClick={() => setShowForm(!showForm)}>+</span>
+                  {showForm ? (
+                    <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input autoFocus placeholder="Título de la tarea" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setShowForm(false); }}
+                        style={{ flex: 2, minWidth: 160, padding: "4px 8px", border: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", outline: "none", color: TD.text }} />
+                      <select value={newTask.priority} onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                        style={{ padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit", color: TD.muted }}>
+                        {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+                      </select>
+                      <input placeholder="Asignado por" value={newTask.assignedBy} onChange={(e) => setNewTask({ ...newTask, assignedBy: e.target.value })}
+                        style={{ flex: 1, minWidth: 100, padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
+                      <input placeholder="Notas" value={newTask.notes} onChange={(e) => setNewTask({ ...newTask, notes: e.target.value })}
+                        style={{ flex: 2, minWidth: 120, padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
+                      <button onClick={addTask} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "4px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
+                      <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 13 }}>✕</button>
+                    </div>
                   ) : (
-                    getSpecTasks(selectedSpec.id)
-                      .filter((t) => t.categoryId === "cat_fixed_completado")
-                      .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))
-                      .map((task) => (
-                        <div key={task.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 4px", borderBottom: "1px solid #F5F5F5" }}>
-                          <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
-                            style={{ width: 17, height: 17, borderRadius: "50%", border: "2px solid #27AE60", background: "#27AE60", cursor: "pointer", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>
-                            ✓
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: "#888", textDecoration: "line-through", marginBottom: 2 }}>{task.title}</div>
-                            {task.notes && <div style={{ fontSize: 11, color: "#BBB", marginBottom: 2 }}>{task.notes}</div>}
-                            <div style={{ fontSize: 10, color: "#CCC" }}>
-                              {task.assignedBy && `Por: ${task.assignedBy} · `}
-                              <span style={{ color: "#27AE60" }}>✓ {task.completedAtDisplay}</span>
-                            </div>
-                          </div>
-                          <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EEE", fontSize: 15, padding: 0 }}>×</button>
-                        </div>
-                      ))
+                    <span style={{ color: TD.muted, fontSize: 13, cursor: "pointer" }} onClick={() => setShowForm(true)}>Agregar una tarea</span>
                   )}
                 </div>
+              )}
+            </div>
+
+            {/* Lista de tareas */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 28px 20px" }}>
+              {selectedCategory === "cat_fixed_completado" ? (
+                <div>
+                  {getSpecTasks(selectedSpec.id).filter((t) => t.categoryId === "cat_fixed_completado").length === 0 ? (
+                    <div style={{ color: TD.light, fontSize: 13, textAlign: "center", padding: "48px 0" }}>No hay tareas completadas aún</div>
+                  ) : getSpecTasks(selectedSpec.id)
+                    .filter((t) => t.categoryId === "cat_fixed_completado")
+                    .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))
+                    .map((task) => (
+                      <div key={task.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}` }}>
+                        <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
+                          style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid #107C10", background: "#107C10", cursor: "pointer", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>✓</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, color: TD.light, textDecoration: "line-through" }}>{task.title}</div>
+                          {task.completedAtDisplay && <div style={{ fontSize: 11, color: TD.light, marginTop: 2 }}>Completado: {task.completedAtDisplay}</div>}
+                        </div>
+                        <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.border, fontSize: 14, padding: 0 }}>×</button>
+                      </div>
+                    ))
+                  }
+                </div>
               ) : (
-                // Vista normal con separadores por prioridad
                 <div>
                   {PRIORITIES.map((priority, idx) => {
                     const pc = PRIORITY_CONFIG[priority];
@@ -828,34 +872,41 @@ export default function App() {
                       <div key={priority}
                         onDragOver={(e) => { e.preventDefault(); setDragOverPriority(priority); }}
                         onDragLeave={() => setDragOverPriority(null)}
-                        onDrop={async (e) => { e.preventDefault(); if (draggedTask && draggedTask.priority !== priority) await updateDoc(doc(db, `tasks_${selectedSpec.id}`, draggedTask.id), { priority }); setDraggedTask(null); setDragOverPriority(null); }}
-                      >
-                        {/* Separador de prioridad */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", marginTop: idx > 0 ? 8 : 0, background: isDragOver ? pc.bg : "transparent", borderRadius: 6, transition: "background 0.15s", paddingLeft: isDragOver ? 8 : 0 }}>
-                          <div style={{ width: 3, height: 16, borderRadius: 2, background: pc.color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 11, fontWeight: "bold", color: "#555", textTransform: "uppercase", letterSpacing: 1 }}>{pc.label}</span>
-                          <div style={{ flex: 1, height: 1, background: "#EBEBEB" }} />
-                          <span style={{ fontSize: 10, color: "#AAA" }}>{priorityTasks.length}</span>
+                        onDrop={async (e) => { e.preventDefault(); if (draggedTask && draggedTask.priority !== priority) await updateDoc(doc(db, `tasks_${selectedSpec.id}`, draggedTask.id), { priority }); setDraggedTask(null); setDragOverPriority(null); }}>
+                        {/* Separador */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", marginTop: idx > 0 ? 8 : 0, background: isDragOver ? pc.bg : "transparent", borderRadius: 4, transition: "background 0.1s" }}>
+                          <div style={{ width: 2, height: 14, borderRadius: 1, background: pc.color }} />
+                          <span style={{ fontSize: 11, fontWeight: 600, color: TD.muted, letterSpacing: 0.5 }}>{pc.label}</span>
+                          <div style={{ flex: 1, height: 1, background: TD.border }} />
+                          <span style={{ fontSize: 11, color: TD.light }}>{priorityTasks.length}</span>
                         </div>
-
-                        {/* Tareas */}
                         {priorityTasks.length === 0 ? (
-                          <div style={{ color: "#DDD", fontSize: 11, padding: "6px 12px 10px", fontStyle: "italic" }}>
-                            Sin tareas — arrastra aquí para cambiar prioridad
+                          <div style={{ fontSize: 12, color: TD.border, padding: "4px 10px 8px", fontStyle: "italic" }}>
+                            Sin tareas · arrastra aquí
                           </div>
                         ) : priorityTasks.map((task) => (
                           <div key={task.id} draggable
                             onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }}
                             onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
-                            style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 4px 9px 12px", borderBottom: "1px solid #F8F8F8", cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.15s", borderLeft: `3px solid ${pc.color}22`, marginBottom: 1 }}>
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}`, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = TD.bg; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                             <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
-                              style={{ width: 17, height: 17, borderRadius: "50%", border: `2px solid #CCC`, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }} />
+                              style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${TD.border}`, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "border-color 0.1s" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = pc.color; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: "bold", fontSize: 13, color: "#1A1A2E", marginBottom: 2 }}>{task.title}</div>
-                              {task.notes && <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>{task.notes}</div>}
-                              <div style={{ fontSize: 10, color: "#CCC" }}>{task.assignedBy && `Por: ${task.assignedBy} · `}{task.createdAtDisplay}</div>
+                              <div style={{ fontSize: 13, color: TD.text, marginBottom: task.notes ? 2 : 0 }}>{task.title}</div>
+                              {task.notes && <div style={{ fontSize: 11, color: TD.muted }}>{task.notes}</div>}
+                              <div style={{ fontSize: 11, color: TD.light, marginTop: 2 }}>
+                                {task.assignedBy && <span>{task.assignedBy} · </span>}
+                                {task.createdAtDisplay}
+                              </div>
                             </div>
-                            <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#DDD", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
+                            <button onClick={() => deleteTask(selectedSpec.id, task.id)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: TD.border, fontSize: 14, padding: "0 4px", lineHeight: 1 }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = TD.muted; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.color = TD.border; }}>×</button>
                           </div>
                         ))}
                       </div>
