@@ -7,7 +7,7 @@ import {
 import emailjs from "@emailjs/browser";
 
 const EMAILJS_SERVICE = "service_uv11blm";
-const EMAILJS_TEMPLATE = "template_d1t0lp9";
+const EMAILJS_TEMPLATE = "template_684ulat";
 const EMAILJS_KEY = "z3QSE3HNem66UkZ4J";
 const CLOUDINARY_CLOUD = "du0wkcpgj";
 const CLOUDINARY_PRESET = "l2shkadh";
@@ -589,12 +589,22 @@ export default function App() {
         setLoading(false);
       }));
       catUnsubs.push(onSnapshot(collection(db, `categories_${spec.id}`), (snap) => {
+        const FIXED = [
+          { id: "cat_fixed_enproceso", name: "En proceso", fixed: true },
+          { id: "cat_fixed_completado", name: "Completado", fixed: true },
+        ];
         if (snap.empty) {
-          const defs = DEFAULT_CATEGORIES.map((name, i) => ({ id: `cat_default_${i}`, name }));
-          setCategories((p) => ({ ...p, [spec.id]: defs }));
-          defs.forEach((c) => setDoc(doc(db, `categories_${spec.id}`, c.id), { name: c.name }));
+          setCategories((p) => ({ ...p, [spec.id]: FIXED }));
+          FIXED.forEach((c) => setDoc(doc(db, `categories_${spec.id}`, c.id), { name: c.name, fixed: true }));
         } else {
-          setCategories((p) => ({ ...p, [spec.id]: snap.docs.map((d) => ({ id: d.id, name: d.data().name })) }));
+          const fromDb = snap.docs.map((d) => ({ id: d.id, name: d.data().name, fixed: d.data().fixed || false }));
+          FIXED.forEach((fc) => {
+            if (!fromDb.find((c) => c.id === fc.id))
+              setDoc(doc(db, `categories_${spec.id}`, fc.id), { name: fc.name, fixed: true });
+          });
+          const fixed = FIXED.map((fc) => fromDb.find((c) => c.id === fc.id) || fc);
+          const custom = fromDb.filter((c) => !c.fixed);
+          setCategories((p) => ({ ...p, [spec.id]: [...fixed, ...custom] }));
         }
       }));
     });
@@ -624,7 +634,21 @@ export default function App() {
   };
 
   const toggleStatus = async (specId, taskId, current) => {
-    await updateDoc(doc(db, `tasks_${specId}`, taskId), { status: current === "Completada" ? "Pendiente" : "Completada" });
+    const isCompleting = current !== "Completada";
+    const now = new Date();
+    const updateData = {
+      status: isCompleting ? "Completada" : "Pendiente",
+    };
+    if (isCompleting) {
+      updateData.categoryId = "cat_fixed_completado";
+      updateData.completedAt = now.toISOString();
+      updateData.completedAtDisplay = now.toLocaleString("es-CL");
+    } else {
+      updateData.categoryId = "cat_fixed_enproceso";
+      updateData.completedAt = null;
+      updateData.completedAtDisplay = null;
+    }
+    await updateDoc(doc(db, `tasks_${specId}`, taskId), updateData);
   };
 
   const addCategory = async () => {
@@ -637,6 +661,8 @@ export default function App() {
   };
 
   const deleteCategory = async (specId, catId) => {
+    const cat = getSpecCategories(specId).find((c) => c.id === catId);
+    if (cat?.fixed) return alert("Esta categoría es fija y no se puede eliminar.");
     if (!window.confirm("¿Eliminar esta categoría y todas sus tareas?")) return;
     await deleteDoc(doc(db, `categories_${specId}`, catId));
     await Promise.all(getSpecTasks(specId).filter((t) => t.categoryId === catId).map((t) => deleteDoc(doc(db, `tasks_${specId}`, t.id))));
@@ -712,10 +738,10 @@ export default function App() {
                     style={{ padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", background: isActive ? "#2D2D50" : "transparent", borderLeft: isActive ? `3px solid ${selectedSpec.color}` : "3px solid transparent", transition: "all 0.12s" }}
                     onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "#22223A"; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-                    <span style={{ color: isActive ? "white" : "#888", fontSize: 13, flex: 1 }}>{cat.name}</span>
+                    <span style={{ color: isActive ? "white" : "#888", fontSize: 13, flex: 1 }}>{cat.name}{cat.fixed && <span style={{ fontSize: 9, color: "#C9A84C", marginLeft: 4 }}>●</span>}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {count > 0 && <span style={{ background: selectedSpec.color, color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: "bold" }}>{count}</span>}
-                      {isActive && <span onClick={(e) => { e.stopPropagation(); deleteCategory(selectedSpec.id, cat.id); }} style={{ color: "#555", cursor: "pointer", fontSize: 14 }}>×</span>}
+                      {isActive && !cat.fixed && <span onClick={(e) => { e.stopPropagation(); deleteCategory(selectedSpec.id, cat.id); }} style={{ color: "#555", cursor: "pointer", fontSize: 14 }}>×</span>}
                     </div>
                   </div>
                 );
@@ -791,7 +817,10 @@ export default function App() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontWeight: "bold", fontSize: 13, color: "#1A1A2E", textDecoration: done ? "line-through" : "none", marginBottom: 2 }}>{task.title}</div>
                               {task.notes && <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>{task.notes}</div>}
-                              <div style={{ fontSize: 10, color: "#CCC" }}>{task.assignedBy && `Por: ${task.assignedBy} · `}{task.createdAtDisplay}</div>
+                              <div style={{ fontSize: 10, color: "#CCC" }}>
+                                {task.assignedBy && `Por: ${task.assignedBy} · `}{task.createdAtDisplay}
+                                {task.completedAtDisplay && <span style={{ color: "#27AE60", marginLeft: 6 }}>✓ Completado: {task.completedAtDisplay}</span>}
+                              </div>
                             </div>
                             <button onClick={() => deleteTask(selectedSpec.id, task.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#DDD", fontSize: 15, padding: 0, lineHeight: 1 }}>×</button>
                           </div>
