@@ -700,17 +700,17 @@ export default function App() {
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: TD.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
       {/* Top bar - To Do style */}
-      <div style={{ background: TD.white, borderBottom: `1px solid ${TD.border}`, padding: "0 24px", display: "flex", alignItems: "center", height: 48, flexShrink: 0, gap: 16 }}>
+      <div style={{ background: TD.blue, padding: "0 24px", display: "flex", alignItems: "center", height: 52, flexShrink: 0, gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 6, background: TD.blue, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ color: "white", fontSize: 14 }}>✓</span>
           </div>
-          <span style={{ fontWeight: 600, fontSize: 15, color: TD.text }}>Panel de Soporte</span>
+          <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
         {["tareas", "cotizaciones"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod === "cotizaciones") setSelectedSpec(null); }}
-            style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? TD.sidebarActive : "transparent", color: activeModule === mod ? TD.blue : TD.muted, fontWeight: activeModule === mod ? 600 : 400, transition: "all 0.1s" }}>
+            style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
             {mod === "tareas" ? "Tareas" : "Cotizaciones"}
           </button>
         ))}
@@ -719,7 +719,7 @@ export default function App() {
       {activeModule === "cotizaciones" ? <QuotesModule /> : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
-          <div style={{ fontSize: 12, color: TD.light, marginBottom: 20, fontWeight: 500 }}>ESPECIALISTAS DE SOPORTE</div>
+          <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>ESPECIALISTAS DE SOPORTE</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, maxWidth: 1000 }}>
             {SPECIALISTS.map((spec) => {
               const pending = pendingCount(spec.id), total = getSpecTasks(spec.id).length;
@@ -729,7 +729,7 @@ export default function App() {
                   onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = TD.blue; }}
                   onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = TD.border; }}>
                   <div style={{ width: 52, height: 52, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, margin: "0 auto 12px" }}>{spec.avatar}</div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: TD.text, marginBottom: 2 }}>{spec.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: TD.text, marginBottom: 2 }}>{spec.name}</div>
                   <div style={{ fontSize: 11, color: TD.light, marginBottom: 10 }}>{spec.role}</div>
                   <div style={{ marginBottom: 12 }}>{spec.managers.map((m) => <span key={m} style={{ display: "inline-block", background: TD.sidebarActive, color: TD.blue, borderRadius: 3, padding: "1px 7px", fontSize: 10, margin: 2, fontWeight: 500 }}>{m}</span>)}</div>
                   <div style={{ fontSize: 12, color: pending > 0 ? TD.blue : TD.light }}>
@@ -773,7 +773,7 @@ export default function App() {
                     onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
                     onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
                     <span style={{ fontSize: 14 }}>{cat.id === "cat_fixed_completado" ? "✓" : "☰"}</span>
-                    <span style={{ flex: 1, fontSize: 13, color: isActive ? TD.blue : TD.text, fontWeight: isActive ? 600 : 400 }}>{cat.name}</span>
+                    <span style={{ flex: 1, fontSize: 14, color: isActive ? TD.blue : TD.text, fontWeight: isActive ? 700 : 400 }}>{cat.name}</span>
                     {count > 0 && <span style={{ fontSize: 11, color: isActive ? TD.blue : TD.muted, fontWeight: 500 }}>{count}</span>}
                     {isActive && !cat.fixed && (
                       <span onClick={(e) => { e.stopPropagation(); deleteCategory(selectedSpec.id, cat.id); }}
@@ -811,7 +811,7 @@ export default function App() {
 
             {/* Header lista */}
             <div style={{ padding: "20px 28px 0" }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, marginBottom: 16 }}>{currentCatName}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, marginBottom: 16, letterSpacing: -0.3 }}>{currentCatName}</div>
 
               {/* Agregar tarea - To Do style */}
               {selectedCategory !== "cat_fixed_completado" && (
@@ -834,7 +834,7 @@ export default function App() {
                       <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 13 }}>✕</button>
                     </div>
                   ) : (
-                    <span style={{ color: TD.muted, fontSize: 13, cursor: "pointer" }} onClick={() => setShowForm(true)}>Agregar una tarea</span>
+                    <span style={{ color: TD.muted, fontSize: 14, cursor: "pointer" }} onClick={() => setShowForm(true)}>Agregar una tarea</span>
                   )}
                 </div>
               )}
@@ -876,7 +876,7 @@ export default function App() {
                         {/* Separador */}
                         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0 6px", marginTop: idx > 0 ? 8 : 0, background: isDragOver ? pc.bg : "transparent", borderRadius: 4, transition: "background 0.1s" }}>
                           <div style={{ width: 2, height: 14, borderRadius: 1, background: pc.color }} />
-                          <span style={{ fontSize: 11, fontWeight: 600, color: TD.muted, letterSpacing: 0.5 }}>{pc.label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>{pc.label}</span>
                           <div style={{ flex: 1, height: 1, background: TD.border }} />
                           <span style={{ fontSize: 11, color: TD.light }}>{priorityTasks.length}</span>
                         </div>
@@ -896,7 +896,7 @@ export default function App() {
                               onMouseEnter={(e) => { e.currentTarget.style.borderColor = pc.color; }}
                               onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, color: TD.text, marginBottom: task.notes ? 2 : 0 }}>{task.title}</div>
+                              <div style={{ fontSize: 14, color: TD.text, fontWeight: 500, marginBottom: task.notes ? 2 : 0 }}>{task.title}</div>
                               {task.notes && <div style={{ fontSize: 11, color: TD.muted }}>{task.notes}</div>}
                               <div style={{ fontSize: 11, color: TD.light, marginTop: 2 }}>
                                 {task.assignedBy && <span>{task.assignedBy} · </span>}
