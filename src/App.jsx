@@ -7,7 +7,7 @@ import {
 import emailjs from "@emailjs/browser";
 
 const EMAILJS_SERVICE = "service_uv11blm";
-const EMAILJS_TEMPLATE = "template_684ulat";
+const EMAILJS_TEMPLATE = "template_d1t0lp9";
 const EMAILJS_KEY = "z3QSE3HNem66UkZ4J";
 const CLOUDINARY_CLOUD = "du0wkcpgj";
 const CLOUDINARY_PRESET = "l2shkadh";
