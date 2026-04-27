@@ -412,7 +412,7 @@ function QuotesModule() {
 
             {items.map((item, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 32px", gap: 8, marginBottom: 8 }}>
-                <input placeholder={`Ítem ${i + 1}: ej. Reparación de cielo`} value={item.descripcion}
+                <input placeholder={"Ítem " + (i + 1) + ": ej. Reparación de cielo"} value={item.descripcion}
                   onChange={(e) => updateItem(i, "descripcion", e.target.value)}
                   style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #DDD", fontSize: 13, fontFamily: "Georgia, serif" }} />
                 <input type="number" placeholder="0" value={item.cantidad}
@@ -471,7 +471,7 @@ function QuotesModule() {
           const borderColor = quote.estado === "aprobado" ? "#27AE60" : quote.estado === "rechazado" ? "#E74C3C" : quote.estado === "cotizado" ? "#1B4F72" : "#CCC";
 
           return (
-            <div key={quote.id} style={{ background: "white", borderRadius: 12, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", borderLeft: `4px solid ${borderColor}`, overflow: "hidden" }}>
+            <div key={quote.id} style={{ background: "white", borderRadius: 12, boxShadow: "0 1px 8px rgba(0,0,0,0.06)", borderLeft: "4px solid " + borderColor, overflow: "hidden" }}>
               {/* Cabecera */}
               <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
                 <div style={{ flex: 1 }}>
@@ -530,7 +530,7 @@ function QuotesModule() {
                     const isLowest = i === 0;
                     const offerStatus = offer.estado;
                     return (
-                      <div key={i} style={{ background: "white", border: `1px solid ${isLowest ? "#C8E6C9" : "#EEE"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 14 }}>
+                      <div key={i} style={{ background: "white", border: "1px solid " + (isLowest ? "#C8E6C9" : "#EEE"), borderRadius: 10, padding: "12px 16px", marginBottom: 8, display: "flex", alignItems: "center", gap: 14 }}>
                         <div style={{ width: 28, height: 28, borderRadius: "50%", background: isLowest ? "#27AE60" : "#EEE", color: isLowest ? "white" : "#888", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: "bold", flexShrink: 0 }}>
                           {i + 1}
                         </div>
@@ -661,7 +661,7 @@ function GasModule() {
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       {/* Sidebar edificios */}
-      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
         <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>EDIFICIOS</div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {buildings.map((b) => {
@@ -693,25 +693,25 @@ function GasModule() {
             );
           })}
         </div>
-        <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
+        <div style={{ padding: "8px 12px", borderTop: "1px solid " + TD.border }}>
           {showBuildingForm ? (
             <div>
               <input autoFocus value={newBuilding.nombre} onChange={(e) => setNewBuilding({ ...newBuilding, nombre: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") addBuilding(); if (e.key === "Escape") setShowBuildingForm(false); }}
                 placeholder="Nombre del edificio *"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newBuilding.direccion} onChange={(e) => setNewBuilding({ ...newBuilding, direccion: e.target.value })}
                 placeholder="Dirección"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newBuilding.proveedor} onChange={(e) => setNewBuilding({ ...newBuilding, proveedor: e.target.value })}
                 placeholder="Proveedor de gas"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newBuilding.num_cliente} onChange={(e) => setNewBuilding({ ...newBuilding, num_cliente: e.target.value })}
                 placeholder="N° de cliente"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newBuilding.capacidad} onChange={(e) => setNewBuilding({ ...newBuilding, capacidad: e.target.value })}
                 placeholder="Capacidad del estanque (litros)"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TD.muted, marginBottom: 6, cursor: "pointer" }}>
                 <input type="checkbox" checked={newBuilding.pac} onChange={(e) => setNewBuilding({ ...newBuilding, pac: e.target.checked })} />
                 En PAC (Programa de Abastecimiento Continuo)
@@ -765,7 +765,7 @@ function GasModule() {
                   { label: "Total invertido", value: `$${totalMonto.toLocaleString("es-CL")}`, icon: "💰" },
                   { label: "Última recarga", value: getLastRecharge(selectedBuilding.id) ? `${getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha)} días` : "Sin recargas", icon: "📅", alert: getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha) >= ALERT_DAYS },
                 ].map((stat) => (
-                  <div key={stat.label} style={{ background: stat.alert ? "#FDF3F3" : TD.bg, border: `1px solid ${stat.alert ? "#F4ABAB" : TD.border}`, borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 0 }}>
+                  <div key={stat.label} style={{ background: stat.alert ? "#FDF3F3" : TD.bg, border: "1px solid " + (stat.alert ? "#F4ABAB" : TD.border), borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 18, marginBottom: 4 }}>{stat.icon}</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: stat.alert ? "#D13438" : TD.text }}>{stat.value}</div>
                     <div style={{ fontSize: 11, color: TD.light }}>{stat.label}</div>
@@ -784,17 +784,17 @@ function GasModule() {
               )}
 
               {/* Botón agregar + formulario */}
-              <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
+              <div style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
                 {showRechargeForm ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <input type="date" value={newRecharge.fecha} onChange={(e) => setNewRecharge({ ...newRecharge, fecha: e.target.value })}
-                      style={{ padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <input type="number" placeholder="Litros" value={newRecharge.litros} onChange={(e) => setNewRecharge({ ...newRecharge, litros: e.target.value })}
-                      style={{ width: 90, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ width: 90, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <input placeholder="Monto $" value={newRecharge.monto} onChange={(e) => setNewRecharge({ ...newRecharge, monto: e.target.value })}
-                      style={{ width: 110, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ width: 110, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <input placeholder="Notas (opcional)" value={newRecharge.notas} onChange={(e) => setNewRecharge({ ...newRecharge, notas: e.target.value })}
-                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <button onClick={addRecharge} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px 14px", fontSize: 13, cursor: "pointer" }}>Registrar</button>
                     <button onClick={() => setShowRechargeForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14 }}>✕</button>
                   </div>
@@ -814,7 +814,7 @@ function GasModule() {
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${TD.border}` }}>
+                    <tr style={{ borderBottom: "2px solid " + TD.border }}>
                       {["Fecha", "Litros", "Monto", "Notas", ""].map((h) => (
                         <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600, letterSpacing: 0.3 }}>{h}</th>
                       ))}
@@ -822,7 +822,7 @@ function GasModule() {
                   </thead>
                   <tbody>
                     {buildingRecharges.map((r, i) => (
-                      <tr key={r.id} style={{ borderBottom: `1px solid ${TD.border}`, background: i === 0 ? "#F0F7FF" : "transparent" }}>
+                      <tr key={r.id} style={{ borderBottom: "1px solid " + TD.border, background: i === 0 ? "#F0F7FF" : "transparent" }}>
                         <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 600 : 400 }}>
                           {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
                           {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: TD.blue, color: "white", borderRadius: 3, padding: "1px 6px" }}>Última</span>}
@@ -1097,7 +1097,7 @@ function KilometrajeModule() {
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       {/* Sidebar conductores */}
-      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
         <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>CONDUCTORES</div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {drivers.map((d) => {
@@ -1123,19 +1123,19 @@ function KilometrajeModule() {
             );
           })}
         </div>
-        <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
+        <div style={{ padding: "8px 12px", borderTop: "1px solid " + TD.border }}>
           {showDriverForm ? (
             <div>
               <input autoFocus value={newDriver.nombre} onChange={(e) => setNewDriver({ ...newDriver, nombre: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") addDriver(); if (e.key === "Escape") setShowDriverForm(false); }}
                 placeholder="Nombre del conductor *"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newDriver.vehiculo} onChange={(e) => setNewDriver({ ...newDriver, vehiculo: e.target.value })}
                 placeholder="Vehículo (ej: Toyota Hilux)"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newDriver.patente} onChange={(e) => setNewDriver({ ...newDriver, patente: e.target.value })}
                 placeholder="Patente"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={addDriver} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
                 <button onClick={() => setShowDriverForm(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
@@ -1184,7 +1184,7 @@ function KilometrajeModule() {
                   { label: "Último registro", value: lastRecord ? new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL") : "—", icon: "📅" },
                   { label: "KM actual", value: lastRecord ? lastRecord.km_actual?.toLocaleString("es-CL") + " km" : "—", icon: "🔢" },
                 ].map((s) => (
-                  <div key={s.label} style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 8, padding: "12px 16px", flex: 1 }}>
+                  <div key={s.label} style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 8, padding: "12px 16px", flex: 1 }}>
                     <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
                     <div style={{ fontSize: 17, fontWeight: 700, color: TD.text }}>{s.value}</div>
                     <div style={{ fontSize: 11, color: TD.light }}>{s.label}</div>
@@ -1193,15 +1193,15 @@ function KilometrajeModule() {
               </div>
 
               {/* Formulario inline */}
-              <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
+              <div style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
                 {showRecordForm ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <input type="date" value={newRecord.fecha} onChange={(e) => setNewRecord({ ...newRecord, fecha: e.target.value })}
-                      style={{ padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <input type="number" placeholder="KM actual del vehículo" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
-                      style={{ width: 160, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ width: 160, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <input placeholder="Notas (opcional)" value={newRecord.notas} onChange={(e) => setNewRecord({ ...newRecord, notas: e.target.value })}
-                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
                     <button onClick={addRecord} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px 14px", fontSize: 13, cursor: "pointer" }}>Registrar</button>
                     <button onClick={() => setShowRecordForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14 }}>✕</button>
                   </div>
@@ -1221,7 +1221,7 @@ function KilometrajeModule() {
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ borderBottom: `2px solid ${TD.border}` }}>
+                    <tr style={{ borderBottom: "2px solid " + TD.border }}>
                       {["Fecha", "KM actual", "KM recorridos", "Notas", ""].map((h) => (
                         <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
                       ))}
@@ -1229,7 +1229,7 @@ function KilometrajeModule() {
                   </thead>
                   <tbody>
                     {driverRecords.map((r, i) => (
-                      <tr key={r.id} style={{ borderBottom: `1px solid ${TD.border}`, background: i === 0 ? "#F0F7FF" : "transparent" }}>
+                      <tr key={r.id} style={{ borderBottom: "1px solid " + TD.border, background: i === 0 ? "#F0F7FF" : "transparent" }}>
                         <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 600 : 400 }}>
                           {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
                           {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: TD.blue, color: "white", borderRadius: 3, padding: "1px 6px" }}>Último</span>}
@@ -1449,7 +1449,7 @@ export default function App() {
               const pending = pendingCount(spec.id), total = getSpecTasks(spec.id).length;
               return (
                 <div key={spec.id} onClick={() => { setSelectedSpec(spec); setSelectedCategory(null); }}
-                  style={{ background: TD.white, borderRadius: 8, padding: "20px 18px", cursor: "pointer", border: `1px solid ${TD.border}`, transition: "all 0.15s", textAlign: "center" }}
+                  style={{ background: TD.white, borderRadius: 8, padding: "20px 18px", cursor: "pointer", border: "1px solid " + TD.border, transition: "all 0.15s", textAlign: "center" }}
                   onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = TD.blue; }}
                   onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = TD.border; }}>
                   <div style={{ width: 52, height: 52, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, margin: "0 auto 12px" }}>{spec.avatar}</div>
@@ -1470,9 +1470,9 @@ export default function App() {
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
           {/* Sidebar - To Do style */}
-          <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+          <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
             {/* Especialista header */}
-            <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${TD.border}` }}>
+            <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid " + TD.border }}>
               <button onClick={() => { setSelectedSpec(null); setSelectedCategory(null); setShowForm(false); }}
                 style={{ background: "none", border: "none", cursor: "pointer", color: TD.blue, fontSize: 12, padding: 0, marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
                 ← Volver
@@ -1509,7 +1509,7 @@ export default function App() {
             </div>
 
             {/* Nueva lista */}
-            <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
+            <div style={{ padding: "8px 12px", borderTop: "1px solid " + TD.border }}>
               {showCategoryInput ? (
                 <div>
                   <input autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)}
@@ -1540,7 +1540,7 @@ export default function App() {
 
               {/* Agregar tarea - To Do style */}
               {selectedCategory !== "cat_fixed_completado" && (
-                <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 6, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ color: TD.blue, fontSize: 18, fontWeight: 300, cursor: "pointer" }} onClick={() => setShowForm(!showForm)}>+</span>
                   {showForm ? (
                     <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1548,13 +1548,13 @@ export default function App() {
                         onKeyDown={(e) => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setShowForm(false); }}
                         style={{ flex: 2, minWidth: 160, padding: "4px 8px", border: "none", background: "transparent", fontSize: 13, fontFamily: "inherit", outline: "none", color: TD.text }} />
                       <select value={newTask.priority} onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                        style={{ padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit", color: TD.muted }}>
+                        style={{ padding: "4px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 12, fontFamily: "inherit", color: TD.muted }}>
                         {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
                       </select>
                       <input placeholder="Asignado por" value={newTask.assignedBy} onChange={(e) => setNewTask({ ...newTask, assignedBy: e.target.value })}
-                        style={{ flex: 1, minWidth: 100, padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
+                        style={{ flex: 1, minWidth: 100, padding: "4px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
                       <input placeholder="Notas" value={newTask.notes} onChange={(e) => setNewTask({ ...newTask, notes: e.target.value })}
-                        style={{ flex: 2, minWidth: 120, padding: "4px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
+                        style={{ flex: 2, minWidth: 120, padding: "4px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 12, fontFamily: "inherit" }} />
                       <button onClick={addTask} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "4px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
                       <button onClick={() => setShowForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 13 }}>✕</button>
                     </div>
@@ -1575,7 +1575,7 @@ export default function App() {
                     .filter((t) => t.categoryId === "cat_fixed_completado")
                     .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""))
                     .map((task) => (
-                      <div key={task.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}` }}>
+                      <div key={task.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: "1px solid " + TD.border }}>
                         <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
                           style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid #107C10", background: "#107C10", cursor: "pointer", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10 }}>✓</div>
                         <div style={{ flex: 1 }}>
@@ -1613,11 +1613,11 @@ export default function App() {
                           <div key={task.id} draggable
                             onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }}
                             onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
-                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}`, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s", background: selectedTask?.id === task.id ? TD.sidebarActive : "transparent" }}
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: "1px solid " + TD.border, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s", background: selectedTask?.id === task.id ? TD.sidebarActive : "transparent" }}
                             onMouseEnter={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = TD.bg; }}
                             onMouseLeave={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = "transparent"; }}>
                             <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
-                              style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${TD.border}`, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "border-color 0.1s" }}
+                              style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid " + TD.border, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "border-color 0.1s" }}
                               onMouseEnter={(e) => { e.currentTarget.style.borderColor = pc.color; }}
                               onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1645,20 +1645,20 @@ export default function App() {
 
           {/* Comment Panel */}
           {selectedTask && (
-            <div style={{ width: 300, background: "#FAFAFA", borderLeft: `1px solid ${TD.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
-              <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${TD.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ width: 300, background: "#FAFAFA", borderLeft: "1px solid " + TD.border, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid " + TD.border, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: TD.text }}>💬 Comentarios</div>
                 <button onClick={() => setSelectedTask(null)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 16 }}>×</button>
               </div>
-              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${TD.border}`, background: TD.white }}>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid " + TD.border, background: TD.white }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: TD.text, marginBottom: 2 }}>{selectedTask.title}</div>
                 {selectedTask.notes && <div style={{ fontSize: 11, color: TD.muted }}>{selectedTask.notes}</div>}
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
-                {(comments[`${selectedTask.specId}_${selectedTask.id}`] || []).length === 0 ? (
+                {(comments[selectedTask.specId + "_" + selectedTask.id] || []).length === 0 ? (
                   <div style={{ color: TD.light, fontSize: 12, textAlign: "center", padding: "24px 0" }}>Sin comentarios aún</div>
-                ) : (comments[`${selectedTask.specId}_${selectedTask.id}`] || []).map((c) => (
-                  <div key={c.id} style={{ marginBottom: 12, background: TD.white, borderRadius: 8, padding: "10px 12px", border: `1px solid ${TD.border}` }}>
+                ) : (comments[selectedTask.specId + "_" + selectedTask.id] || []).map((c) => (
+                  <div key={c.id} style={{ marginBottom: 12, background: TD.white, borderRadius: 8, padding: "10px 12px", border: "1px solid " + TD.border }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                       <div style={{ width: 22, height: 22, borderRadius: "50%", background: TD.blue, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{c.author.charAt(0).toUpperCase()}</div>
                       <span style={{ fontSize: 11, fontWeight: 600, color: TD.text }}>{c.author}</span>
@@ -1668,14 +1668,14 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div style={{ padding: "12px 16px", borderTop: `1px solid ${TD.border}` }}>
+              <div style={{ padding: "12px 16px", borderTop: "1px solid " + TD.border }}>
                 <input value={commentAuthor} onChange={(e) => setCommentAuthor(e.target.value)}
                   placeholder="Tu nombre"
-                  style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                  style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
                 <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }}
                   placeholder="Escribe un comentario... (Enter para enviar)"
-                  rows={3} style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", resize: "none", marginBottom: 6 }} />
+                  rows={3} style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", resize: "none", marginBottom: 6 }} />
                 <button onClick={addComment} disabled={!newComment.trim()}
                   style={{ width: "100%", background: newComment.trim() ? TD.blue : TD.border, color: "white", border: "none", borderRadius: 4, padding: "7px", fontSize: 12, cursor: newComment.trim() ? "pointer" : "default", fontFamily: "inherit" }}>
                   Agregar comentario
