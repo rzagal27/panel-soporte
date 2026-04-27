@@ -847,6 +847,175 @@ function GasModule() {
 }
 
 
+
+// ── PÁGINA PÚBLICA DEL CONDUCTOR ─────────────────────────────────────────────
+function DriverPage({ driverId }) {
+  const [driver, setDriver] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [newRecord, setNewRecord] = useState({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const u1 = onSnapshot(doc(db, "km_drivers", driverId), (d) => {
+      if (d.exists()) setDriver({ id: d.id, ...d.data() });
+      setLoading(false);
+    });
+    const u2 = onSnapshot(collection(db, "km_records"), (snap) => {
+      const r = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => r.driverId === driverId)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha));
+      setRecords(r);
+    });
+    return () => { u1(); u2(); };
+  }, [driverId]);
+
+  const submitRecord = async () => {
+    if (!newRecord.fecha || !newRecord.km_actual) return alert("Ingresa la fecha y el kilometraje actual.");
+    setSaving(true);
+    const lastKm = records[0]?.km_actual || 0;
+    const km_actual = parseFloat(newRecord.km_actual);
+    const km_recorrido = lastKm > 0 ? km_actual - lastKm : 0;
+    await addDoc(collection(db, "km_records"), {
+      ...newRecord,
+      driverId,
+      driverNombre: driver.nombre,
+      km_actual,
+      km_recorrido: km_recorrido >= 0 ? km_recorrido : 0,
+      createdAt: new Date().toISOString(),
+    });
+    setNewRecord({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+    setShowForm(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    setSaving(false);
+  };
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", color: "#A19F9D" }}>
+      Cargando...
+    </div>
+  );
+
+  if (!driver) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", color: "#A19F9D" }}>
+      Conductor no encontrado.
+    </div>
+  );
+
+  const lastRecord = records[0];
+
+  return (
+    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#FAF9F8", minHeight: "100vh" }}>
+      {/* Header azul */}
+      <div style={{ background: "#2564CF", padding: "16px 24px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "white" }}>
+          {driver.nombre.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>Registro de Kilometraje</div>
+          <div style={{ color: "white", fontWeight: 700, fontSize: 15 }}>{driver.nombre}</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 20px" }}>
+        {/* Info vehículo */}
+        {(driver.vehiculo || driver.patente) && (
+          <div style={{ background: "white", borderRadius: 10, padding: "14px 18px", marginBottom: 16, border: "1px solid #EDEBE9", display: "flex", gap: 16 }}>
+            {driver.vehiculo && <span style={{ fontSize: 13, color: "#605E5C" }}>🚗 {driver.vehiculo}</span>}
+            {driver.patente && <span style={{ fontSize: 13, color: "#605E5C" }}>🔖 {driver.patente}</span>}
+          </div>
+        )}
+
+        {/* KM actual */}
+        {lastRecord && (
+          <div style={{ background: "#2564CF", borderRadius: 10, padding: "16px 20px", marginBottom: 16, color: "white" }}>
+            <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4 }}>Último registro — {new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL")}</div>
+            <div style={{ fontSize: 32, fontWeight: 700 }}>{lastRecord.km_actual?.toLocaleString("es-CL")} km</div>
+            {lastRecord.km_recorrido > 0 && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>+{lastRecord.km_recorrido?.toLocaleString("es-CL")} km desde el registro anterior</div>}
+          </div>
+        )}
+
+        {/* Notificación guardado */}
+        {saved && (
+          <div style={{ background: "#DFF6DD", border: "1px solid #9FD89F", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#107C10", fontWeight: 600 }}>
+            ✓ Kilometraje registrado correctamente
+          </div>
+        )}
+
+        {/* Botón / Formulario registrar */}
+        {!showForm ? (
+          <button onClick={() => setShowForm(true)}
+            style={{ width: "100%", background: "#2564CF", color: "white", border: "none", borderRadius: 8, padding: "14px", fontSize: 15, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, marginBottom: 20 }}>
+            + Registrar kilometraje
+          </button>
+        ) : (
+          <div style={{ background: "white", borderRadius: 10, padding: "20px", marginBottom: 20, border: "2px solid #2564CF" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F1F1F", marginBottom: 16 }}>Nuevo registro</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Fecha *</label>
+                <input type="date" value={newRecord.fecha} onChange={(e) => setNewRecord({ ...newRecord, fecha: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Kilometraje actual del vehículo *</label>
+                <input type="number" placeholder="Ej: 125430" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+                {lastRecord && newRecord.km_actual && (
+                  <div style={{ fontSize: 11, color: "#2564CF", marginTop: 4 }}>
+                    Km recorridos desde último registro: {Math.max(0, parseFloat(newRecord.km_actual) - lastRecord.km_actual).toLocaleString("es-CL")} km
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Notas (opcional)</label>
+                <input placeholder="Ej: Viaje a obra, mantención, etc." value={newRecord.notas} onChange={(e) => setNewRecord({ ...newRecord, notas: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowForm(false)}
+                  style={{ flex: 1, background: "#F3F2F1", color: "#605E5C", border: "none", borderRadius: 6, padding: "11px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancelar
+                </button>
+                <button onClick={submitRecord} disabled={saving}
+                  style={{ flex: 2, background: saving ? "#A19F9D" : "#2564CF", color: "white", border: "none", borderRadius: 6, padding: "11px", fontSize: 13, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Historial propio */}
+        {records.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#A19F9D", letterSpacing: 0.5, marginBottom: 10 }}>MIS REGISTROS</div>
+            {records.map((r, i) => (
+              <div key={r.id} style={{ background: "white", borderRadius: 8, padding: "12px 16px", marginBottom: 8, border: "1px solid #EDEBE9", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: i === 0 ? "#2564CF" : "#F3F2F1", color: i === 0 ? "white" : "#605E5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                  {i === 0 ? "★" : i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1F1F1F" }}>{r.km_actual?.toLocaleString("es-CL")} km</div>
+                  <div style={{ fontSize: 11, color: "#A19F9D" }}>
+                    {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
+                    {r.km_recorrido > 0 && <span style={{ color: "#107C10", marginLeft: 8 }}>+{r.km_recorrido?.toLocaleString("es-CL")} km</span>}
+                  </div>
+                  {r.notas && <div style={{ fontSize: 11, color: "#605E5C", marginTop: 2 }}>{r.notas}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── MÓDULO KILOMETRAJE ────────────────────────────────────────────────────────
 function KilometrajeModule() {
   const [drivers, setDrivers] = useState([]);
@@ -1107,6 +1276,8 @@ export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const cotizacionId = urlParams.get("cotizacion");
   if (cotizacionId) return <ContractorPage quoteId={cotizacionId} />;
+  const kmDriverId = urlParams.get("km");
+  if (kmDriverId) return <DriverPage driverId={kmDriverId} />;
 
   useEffect(() => {
     let taskUnsubs = [], catUnsubs = [];
@@ -1342,9 +1513,9 @@ export default function App() {
               {showCategoryInput ? (
                 <div>
                   <input autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") addCategory(); if (e.key === "Escape") setShowCategoryInput(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addCategory(); } else if (e.key === "Escape") { setShowCategoryInput(false); } }}
                     placeholder="Nombre de la lista..."
-                    style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                     <button onClick={addCategory} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
                     <button onClick={() => setShowCategoryInput(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
