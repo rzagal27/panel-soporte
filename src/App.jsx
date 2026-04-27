@@ -578,6 +578,254 @@ function QuotesModule() {
 }
 
 // ── APP PRINCIPAL ─────────────────────────────────────────────────────────────
+
+const ALERT_DAYS = 90;
+
+function GasModule() {
+  const [buildings, setBuildings] = useState([]);
+  const [recharges, setRecharges] = useState([]);
+  const [selectedBuilding, setSelectedBuilding] = useState(null);
+  const [showBuildingForm, setShowBuildingForm] = useState(false);
+  const [showRechargeForm, setShowRechargeForm] = useState(false);
+  const [newBuilding, setNewBuilding] = useState({ nombre: "", direccion: "" });
+  const [newRecharge, setNewRecharge] = useState({ fecha: new Date().toISOString().split("T")[0], litros: "", monto: "", notas: "" });
+
+  useEffect(() => {
+    const unsub1 = onSnapshot(collection(db, "gas_buildings"), (snap) => {
+      setBuildings(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    });
+    const unsub2 = onSnapshot(collection(db, "gas_recharges"), (snap) => {
+      setRecharges(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub1(); unsub2(); };
+  }, []);
+
+  const addBuilding = async () => {
+    if (!newBuilding.nombre.trim()) return;
+    await addDoc(collection(db, "gas_buildings"), { ...newBuilding, createdAt: new Date().toISOString() });
+    setNewBuilding({ nombre: "", direccion: "" });
+    setShowBuildingForm(false);
+  };
+
+  const deleteBuilding = async (id) => {
+    if (!window.confirm("¿Eliminar este edificio y todas sus recargas?")) return;
+    await deleteDoc(doc(db, "gas_buildings", id));
+    const toDelete = recharges.filter((r) => r.buildingId === id);
+    await Promise.all(toDelete.map((r) => deleteDoc(doc(db, "gas_recharges", r.id))));
+    if (selectedBuilding?.id === id) setSelectedBuilding(null);
+  };
+
+  const addRecharge = async () => {
+    if (!newRecharge.fecha || !newRecharge.litros || !newRecharge.monto) return alert("Completa fecha, litros y monto.");
+    await addDoc(collection(db, "gas_recharges"), {
+      ...newRecharge,
+      buildingId: selectedBuilding.id,
+      buildingNombre: selectedBuilding.nombre,
+      litros: parseFloat(newRecharge.litros),
+      monto: parseFloat(newRecharge.monto.replace(/\./g, "").replace(",", ".")),
+      montoDisplay: newRecharge.monto,
+      createdAt: new Date().toISOString(),
+    });
+    setNewRecharge({ fecha: new Date().toISOString().split("T")[0], litros: "", monto: "", notas: "" });
+    setShowRechargeForm(false);
+  };
+
+  const deleteRecharge = async (id) => {
+    if (window.confirm("¿Eliminar esta recarga?")) await deleteDoc(doc(db, "gas_recharges", id));
+  };
+
+  const getBuildingRecharges = (buildingId) =>
+    recharges.filter((r) => r.buildingId === buildingId).sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  const getLastRecharge = (buildingId) => {
+    const sorted = getBuildingRecharges(buildingId);
+    return sorted[0] || null;
+  };
+
+  const getDaysSince = (fecha) => {
+    if (!fecha) return null;
+    const diff = new Date() - new Date(fecha);
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const TD = {
+    blue: "#2564CF", sidebar: "#F3F2F1", sidebarHover: "#EAEAEA",
+    sidebarActive: "#E3EEFB", text: "#1F1F1F", muted: "#605E5C",
+    light: "#A19F9D", border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
+  };
+
+  const buildingRecharges = selectedBuilding ? getBuildingRecharges(selectedBuilding.id) : [];
+  const totalLitros = buildingRecharges.reduce((s, r) => s + (r.litros || 0), 0);
+  const totalMonto = buildingRecharges.reduce((s, r) => s + (r.monto || 0), 0);
+
+  return (
+    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* Sidebar edificios */}
+      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>EDIFICIOS</div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {buildings.map((b) => {
+            const last = getLastRecharge(b.id);
+            const days = getDaysSince(last?.fecha);
+            const alert = days !== null && days >= ALERT_DAYS;
+            const isActive = selectedBuilding?.id === b.id;
+            return (
+              <div key={b.id} onClick={() => setSelectedBuilding(b)}
+                style={{ padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: isActive ? TD.sidebarActive : "transparent", borderRadius: "0 4px 4px 0", marginRight: 8, transition: "background 0.1s" }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+                <span style={{ fontSize: 16 }}>🏢</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.nombre}</div>
+                  {alert ? (
+                    <div style={{ fontSize: 11, color: "#D13438", fontWeight: 600 }}>⚠ {days} días sin recargar</div>
+                  ) : last ? (
+                    <div style={{ fontSize: 11, color: TD.light }}>Hace {days} días</div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: TD.light }}>Sin recargas</div>
+                  )}
+                </div>
+                {isActive && (
+                  <span onClick={(e) => { e.stopPropagation(); deleteBuilding(b.id); }}
+                    style={{ color: TD.light, cursor: "pointer", fontSize: 14 }}>×</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
+          {showBuildingForm ? (
+            <div>
+              <input autoFocus value={newBuilding.nombre} onChange={(e) => setNewBuilding({ ...newBuilding, nombre: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") addBuilding(); if (e.key === "Escape") setShowBuildingForm(false); }}
+                placeholder="Nombre del edificio"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newBuilding.direccion} onChange={(e) => setNewBuilding({ ...newBuilding, direccion: e.target.value })}
+                placeholder="Dirección (opcional)"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={addBuilding} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
+                <button onClick={() => setShowBuildingForm(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowBuildingForm(true)}
+              style={{ width: "100%", background: "none", border: "none", color: TD.muted, borderRadius: 4, padding: "7px 4px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16, color: TD.blue }}>+</span> Nuevo edificio
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Panel central */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
+        {!selectedBuilding ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12 }}>
+            <span style={{ fontSize: 48 }}>🔥</span>
+            <div style={{ fontSize: 15, color: TD.muted }}>Selecciona un edificio para ver su historial de recargas</div>
+            {buildings.filter((b) => { const d = getDaysSince(getLastRecharge(b.id)?.fecha); return d !== null && d >= ALERT_DAYS; }).length > 0 && (
+              <div style={{ background: "#FDF3F3", border: "1px solid #F4ABAB", borderRadius: 8, padding: "10px 20px", marginTop: 8 }}>
+                <div style={{ fontSize: 13, color: "#D13438", fontWeight: 600 }}>
+                  ⚠ {buildings.filter((b) => { const d = getDaysSince(getLastRecharge(b.id)?.fecha); return d !== null && d >= ALERT_DAYS; }).length} edificio(s) llevan más de {ALERT_DAYS} días sin recargar
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: "20px 28px 0" }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, marginBottom: 4, letterSpacing: -0.3 }}>{selectedBuilding.nombre}</div>
+              {selectedBuilding.direccion && <div style={{ fontSize: 13, color: TD.muted, marginBottom: 16 }}>{selectedBuilding.direccion}</div>}
+
+              {/* Resumen */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: "Total recargas", value: buildingRecharges.length, icon: "🔢" },
+                  { label: "Total litros", value: `${totalLitros.toLocaleString("es-CL")} L`, icon: "⛽" },
+                  { label: "Total invertido", value: `$${totalMonto.toLocaleString("es-CL")}`, icon: "💰" },
+                  { label: "Última recarga", value: getLastRecharge(selectedBuilding.id) ? `${getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha)} días` : "Sin recargas", icon: "📅", alert: getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha) >= ALERT_DAYS },
+                ].map((stat) => (
+                  <div key={stat.label} style={{ background: stat.alert ? "#FDF3F3" : TD.bg, border: `1px solid ${stat.alert ? "#F4ABAB" : TD.border}`, borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{stat.icon}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: stat.alert ? "#D13438" : TD.text }}>{stat.value}</div>
+                    <div style={{ fontSize: 11, color: TD.light }}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Alerta */}
+              {getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha) >= ALERT_DAYS && (
+                <div style={{ background: "#FDF3F3", border: "1px solid #F4ABAB", borderRadius: 8, padding: "10px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>⚠️</span>
+                  <span style={{ fontSize: 13, color: "#D13438", fontWeight: 600 }}>
+                    Este edificio lleva {getDaysSince(getLastRecharge(selectedBuilding.id)?.fecha)} días sin recargar gas. Se recomienda reabastecer.
+                  </span>
+                </div>
+              )}
+
+              {/* Botón agregar + formulario */}
+              <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
+                {showRechargeForm ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <input type="date" value={newRecharge.fecha} onChange={(e) => setNewRecharge({ ...newRecharge, fecha: e.target.value })}
+                      style={{ padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <input type="number" placeholder="Litros" value={newRecharge.litros} onChange={(e) => setNewRecharge({ ...newRecharge, litros: e.target.value })}
+                      style={{ width: 90, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <input placeholder="Monto $" value={newRecharge.monto} onChange={(e) => setNewRecharge({ ...newRecharge, monto: e.target.value })}
+                      style={{ width: 110, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <input placeholder="Notas (opcional)" value={newRecharge.notas} onChange={(e) => setNewRecharge({ ...newRecharge, notas: e.target.value })}
+                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <button onClick={addRecharge} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px 14px", fontSize: 13, cursor: "pointer" }}>Registrar</button>
+                    <button onClick={() => setShowRechargeForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setShowRechargeForm(true)}>
+                    <span style={{ fontSize: 18, color: TD.blue }}>+</span>
+                    <span style={{ fontSize: 14, color: TD.muted }}>Registrar nueva recarga</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Historial */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 28px 20px" }}>
+              {buildingRecharges.length === 0 ? (
+                <div style={{ color: TD.light, fontSize: 13, textAlign: "center", padding: "40px 0" }}>No hay recargas registradas aún</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${TD.border}` }}>
+                      {["Fecha", "Litros", "Monto", "Notas", ""].map((h) => (
+                        <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600, letterSpacing: 0.3 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {buildingRecharges.map((r, i) => (
+                      <tr key={r.id} style={{ borderBottom: `1px solid ${TD.border}`, background: i === 0 ? "#F0F7FF" : "transparent" }}>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 600 : 400 }}>
+                          {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
+                          {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: TD.blue, color: "white", borderRadius: 3, padding: "1px 6px" }}>Última</span>}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text }}>{r.litros?.toLocaleString("es-CL")} L</td>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: 600 }}>${r.montoDisplay || r.monto?.toLocaleString("es-CL")}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{r.notas || "—"}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          <button onClick={() => deleteRecharge(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 14 }}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [tasks, setTasks] = useState({});
   const [categories, setCategories] = useState({});
@@ -708,15 +956,15 @@ export default function App() {
           <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
-        {["tareas", "cotizaciones"].map((mod) => (
-          <button key={mod} onClick={() => { setActiveModule(mod); if (mod === "cotizaciones") setSelectedSpec(null); }}
+        {["tareas", "cotizaciones", "gas"].map((mod) => (
+          <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") setSelectedSpec(null); }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "Tareas" : "Cotizaciones"}
+            {mod === "tareas" ? "Tareas" : mod === "cotizaciones" ? "Cotizaciones" : "🔥 Gas"}
           </button>
         ))}
       </div>
 
-      {activeModule === "cotizaciones" ? <QuotesModule /> : !selectedSpec ? (
+      {activeModule === "cotizaciones" ? <QuotesModule /> : activeModule === "gas" ? <GasModule /> : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
           <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>ESPECIALISTAS DE SOPORTE</div>
