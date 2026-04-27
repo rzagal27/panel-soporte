@@ -375,7 +375,7 @@ function QuotesModule() {
           <div style={{ fontSize: 10, letterSpacing: 3, color: "#C9A84C", textTransform: "uppercase" }}>Módulo</div>
           <div style={{ fontSize: 22, fontWeight: "bold", color: "#1A1A2E" }}>Cotizaciones</div>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={() => setShowForm(showForm === false)}
           style={{ background: "#1A1A2E", color: "white", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, cursor: "pointer", fontFamily: "Georgia, serif" }}>
           {showForm ? "Cancelar" : "+ Nueva Cotización"}
         </button>
@@ -1415,32 +1415,18 @@ export default function App() {
         {["tareas", "cotizaciones", "gas", "kilometraje"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") setSelectedSpec(null); }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? (
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                Tareas
-              </span>
-            ) : mod === "cotizaciones" ? (
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                Cotizaciones
-              </span>
-            ) : mod === "gas" ? (
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 22V8l9-6 9 6v14"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><rect x="9" y="12" width="6" height="10"/></svg>
-                Gas
-              </span>
-            ) : (
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Kilometraje
-              </span>
-            )}
+            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : "🚗 Kilometraje"}
           </button>
         ))}
       </div>
 
-      {activeModule === "cotizaciones" ? <QuotesModule /> : activeModule === "gas" ? <GasModule /> : activeModule === "kilometraje" ? <KilometrajeModule /> : !selectedSpec ? (
+      {activeModule === "cotizaciones" ? (
+        <QuotesModule />
+      ) : activeModule === "gas" ? (
+        <GasModule />
+      ) : activeModule === "kilometraje" ? (
+        <KilometrajeModule />
+      ) : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
           <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>ESPECIALISTAS DE SOPORTE</div>
@@ -1541,7 +1527,7 @@ export default function App() {
               {/* Agregar tarea - To Do style */}
               {selectedCategory !== "cat_fixed_completado" && (
                 <div style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 6, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ color: TD.blue, fontSize: 18, fontWeight: 300, cursor: "pointer" }} onClick={() => setShowForm(!showForm)}>+</span>
+                  <span style={{ color: TD.blue, fontSize: 18, fontWeight: 300, cursor: "pointer" }} onClick={() => setShowForm(showForm === false)}>+</span>
                   {showForm ? (
                     <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <input autoFocus placeholder="Título de la tarea" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
@@ -1613,15 +1599,15 @@ export default function App() {
                           <div key={task.id} draggable
                             onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }}
                             onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
-                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: "1px solid " + TD.border, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s", background: selectedTask?.id === task.id ? TD.sidebarActive : "transparent" }}
-                            onMouseEnter={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = TD.bg; }}
-                            onMouseLeave={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = "transparent"; }}>
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: "1px solid " + TD.border, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s", background: (selectedTask && selectedTask.id === task.id) ? TD.sidebarActive : "transparent" }}
+                            onMouseEnter={(e) => { if (!selectedTask || selectedTask.id !== task.id) e.currentTarget.style.background = TD.bg; }}
+                            onMouseLeave={(e) => { if (!selectedTask || selectedTask.id !== task.id) e.currentTarget.style.background = "transparent"; }}>
                             <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
                               style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid " + TD.border, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "border-color 0.1s" }}
                               onMouseEnter={(e) => { e.currentTarget.style.borderColor = pc.color; }}
                               onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div onClick={(e) => { e.stopPropagation(); setSelectedTask(selectedTask?.id === task.id ? null : { ...task, specId: selectedSpec.id }); setNewComment(""); }} style={{ fontSize: 14, color: TD.text, fontWeight: 500, marginBottom: task.notes ? 2 : 0, cursor: "pointer" }}>{task.title} <span style={{ fontSize: 10, color: TD.light }}>💬</span></div>
+                              <div onClick={(e) => { e.stopPropagation(); setSelectedTask((selectedTask && selectedTask.id === task.id) ? null : Object.assign({}, task, { specId: selectedSpec.id })); setNewComment(""); }} style={{ fontSize: 14, color: TD.text, fontWeight: 500, marginBottom: task.notes ? 2 : 0, cursor: "pointer" }}>{task.title} <span style={{ fontSize: 10, color: TD.light }}>💬</span></div>
                               {task.notes && <div style={{ fontSize: 11, color: TD.muted }}>{task.notes}</div>}
                               <div style={{ fontSize: 11, color: TD.light, marginTop: 2 }}>
                                 {task.assignedBy && <span>{task.assignedBy} · </span>}
@@ -1673,11 +1659,11 @@ export default function App() {
                   placeholder="Tu nombre"
                   style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
                 <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }}
+                  onKeyDown={(e) => { const isEnter = e.key === "Enter"; const noShift = !e.shiftKey; if (isEnter && noShift) { e.preventDefault(); addComment(); } }}
                   placeholder="Escribe un comentario... (Enter para enviar)"
                   rows={3} style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", resize: "none", marginBottom: 6 }} />
-                <button onClick={addComment} disabled={!newComment.trim()}
-                  style={{ width: "100%", background: newComment.trim() ? TD.blue : TD.border, color: "white", border: "none", borderRadius: 4, padding: "7px", fontSize: 12, cursor: newComment.trim() ? "pointer" : "default", fontFamily: "inherit" }}>
+                <button onClick={addComment} disabled={newComment.trim().length === 0}
+                  style={{ width: "100%", background: newComment.trim().length > 0 ? TD.blue : TD.border, color: "white", border: "none", borderRadius: 4, padding: "7px", fontSize: 12, cursor: newComment.trim().length > 0 ? "pointer" : "default", fontFamily: "inherit" }}>
                   Agregar comentario
                 </button>
               </div>
