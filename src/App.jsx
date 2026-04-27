@@ -587,7 +587,7 @@ function GasModule() {
   const [selectedBuilding, setSelectedBuilding] = useState(null);
   const [showBuildingForm, setShowBuildingForm] = useState(false);
   const [showRechargeForm, setShowRechargeForm] = useState(false);
-  const [newBuilding, setNewBuilding] = useState({ nombre: "", direccion: "" });
+  const [newBuilding, setNewBuilding] = useState({ nombre: "", direccion: "", proveedor: "", num_cliente: "", capacidad: "", pac: false });
   const [newRecharge, setNewRecharge] = useState({ fecha: new Date().toISOString().split("T")[0], litros: "", monto: "", notas: "" });
 
   useEffect(() => {
@@ -698,11 +698,24 @@ function GasModule() {
             <div>
               <input autoFocus value={newBuilding.nombre} onChange={(e) => setNewBuilding({ ...newBuilding, nombre: e.target.value })}
                 onKeyDown={(e) => { if (e.key === "Enter") addBuilding(); if (e.key === "Escape") setShowBuildingForm(false); }}
-                placeholder="Nombre del edificio"
+                placeholder="Nombre del edificio *"
                 style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
               <input value={newBuilding.direccion} onChange={(e) => setNewBuilding({ ...newBuilding, direccion: e.target.value })}
-                placeholder="Dirección (opcional)"
+                placeholder="Dirección"
                 style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newBuilding.proveedor} onChange={(e) => setNewBuilding({ ...newBuilding, proveedor: e.target.value })}
+                placeholder="Proveedor de gas"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newBuilding.num_cliente} onChange={(e) => setNewBuilding({ ...newBuilding, num_cliente: e.target.value })}
+                placeholder="N° de cliente"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newBuilding.capacidad} onChange={(e) => setNewBuilding({ ...newBuilding, capacidad: e.target.value })}
+                placeholder="Capacidad del estanque (litros)"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: TD.muted, marginBottom: 6, cursor: "pointer" }}>
+                <input type="checkbox" checked={newBuilding.pac} onChange={(e) => setNewBuilding({ ...newBuilding, pac: e.target.checked })} />
+                En PAC (Programa de Abastecimiento Continuo)
+              </label>
               <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={addBuilding} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
                 <button onClick={() => setShowBuildingForm(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
@@ -735,7 +748,14 @@ function GasModule() {
           <>
             <div style={{ padding: "20px 28px 0" }}>
               <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, marginBottom: 4, letterSpacing: -0.3 }}>{selectedBuilding.nombre}</div>
-              {selectedBuilding.direccion && <div style={{ fontSize: 13, color: TD.muted, marginBottom: 16 }}>{selectedBuilding.direccion}</div>}
+              {/* Info del edificio */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+                {selectedBuilding.direccion && <span style={{ fontSize: 12, color: TD.muted }}>📍 {selectedBuilding.direccion}</span>}
+                {selectedBuilding.proveedor && <span style={{ fontSize: 12, color: TD.muted }}>🏭 {selectedBuilding.proveedor}</span>}
+                {selectedBuilding.num_cliente && <span style={{ fontSize: 12, color: TD.muted }}>🔖 N° cliente: {selectedBuilding.num_cliente}</span>}
+                {selectedBuilding.capacidad && <span style={{ fontSize: 12, color: TD.muted }}>⛽ Estanque: {selectedBuilding.capacidad} L</span>}
+                {selectedBuilding.pac && <span style={{ fontSize: 12, background: "#E3EEFB", color: TD.blue, borderRadius: 4, padding: "1px 8px", fontWeight: 600 }}>PAC ✓</span>}
+              </div>
 
               {/* Resumen */}
               <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
@@ -826,6 +846,415 @@ function GasModule() {
   );
 }
 
+
+
+// ── PÁGINA PÚBLICA DEL CONDUCTOR ─────────────────────────────────────────────
+function DriverPage({ driverId }) {
+  const [driver, setDriver] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [newRecord, setNewRecord] = useState({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const u1 = onSnapshot(doc(db, "km_drivers", driverId), (d) => {
+      if (d.exists()) setDriver({ id: d.id, ...d.data() });
+      setLoading(false);
+    });
+    const u2 = onSnapshot(collection(db, "km_records"), (snap) => {
+      const r = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((r) => r.driverId === driverId)
+        .sort((a, b) => b.fecha.localeCompare(a.fecha));
+      setRecords(r);
+    });
+    return () => { u1(); u2(); };
+  }, [driverId]);
+
+  const submitRecord = async () => {
+    if (!newRecord.fecha || !newRecord.km_actual) return alert("Ingresa la fecha y el kilometraje actual.");
+    setSaving(true);
+    const lastKm = records[0]?.km_actual || 0;
+    const km_actual = parseFloat(newRecord.km_actual);
+    const km_recorrido = lastKm > 0 ? km_actual - lastKm : 0;
+    await addDoc(collection(db, "km_records"), {
+      ...newRecord,
+      driverId,
+      driverNombre: driver.nombre,
+      km_actual,
+      km_recorrido: km_recorrido >= 0 ? km_recorrido : 0,
+      createdAt: new Date().toISOString(),
+    });
+    setNewRecord({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+    setShowForm(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    setSaving(false);
+  };
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", color: "#A19F9D" }}>
+      Cargando...
+    </div>
+  );
+
+  if (!driver) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "'Segoe UI', system-ui, sans-serif", color: "#A19F9D" }}>
+      Conductor no encontrado.
+    </div>
+  );
+
+  const lastRecord = records[0];
+
+  return (
+    <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: "#FAF9F8", minHeight: "100vh" }}>
+      {/* Header azul */}
+      <div style={{ background: "#2564CF", padding: "16px 24px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "white" }}>
+          {driver.nombre.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>Registro de Kilometraje</div>
+          <div style={{ color: "white", fontWeight: 700, fontSize: 15 }}>{driver.nombre}</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 20px" }}>
+        {/* Info vehículo */}
+        {(driver.vehiculo || driver.patente) && (
+          <div style={{ background: "white", borderRadius: 10, padding: "14px 18px", marginBottom: 16, border: "1px solid #EDEBE9", display: "flex", gap: 16 }}>
+            {driver.vehiculo && <span style={{ fontSize: 13, color: "#605E5C" }}>🚗 {driver.vehiculo}</span>}
+            {driver.patente && <span style={{ fontSize: 13, color: "#605E5C" }}>🔖 {driver.patente}</span>}
+          </div>
+        )}
+
+        {/* KM actual */}
+        {lastRecord && (
+          <div style={{ background: "#2564CF", borderRadius: 10, padding: "16px 20px", marginBottom: 16, color: "white" }}>
+            <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4 }}>Último registro — {new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL")}</div>
+            <div style={{ fontSize: 32, fontWeight: 700 }}>{lastRecord.km_actual?.toLocaleString("es-CL")} km</div>
+            {lastRecord.km_recorrido > 0 && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>+{lastRecord.km_recorrido?.toLocaleString("es-CL")} km desde el registro anterior</div>}
+          </div>
+        )}
+
+        {/* Notificación guardado */}
+        {saved && (
+          <div style={{ background: "#DFF6DD", border: "1px solid #9FD89F", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#107C10", fontWeight: 600 }}>
+            ✓ Kilometraje registrado correctamente
+          </div>
+        )}
+
+        {/* Botón / Formulario registrar */}
+        {!showForm ? (
+          <button onClick={() => setShowForm(true)}
+            style={{ width: "100%", background: "#2564CF", color: "white", border: "none", borderRadius: 8, padding: "14px", fontSize: 15, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, marginBottom: 20 }}>
+            + Registrar kilometraje
+          </button>
+        ) : (
+          <div style={{ background: "white", borderRadius: 10, padding: "20px", marginBottom: 20, border: "2px solid #2564CF" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1F1F1F", marginBottom: 16 }}>Nuevo registro</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Fecha *</label>
+                <input type="date" value={newRecord.fecha} onChange={(e) => setNewRecord({ ...newRecord, fecha: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Kilometraje actual del vehículo *</label>
+                <input type="number" placeholder="Ej: 125430" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+                {lastRecord && newRecord.km_actual && (
+                  <div style={{ fontSize: 11, color: "#2564CF", marginTop: 4 }}>
+                    Km recorridos desde último registro: {Math.max(0, parseFloat(newRecord.km_actual) - lastRecord.km_actual).toLocaleString("es-CL")} km
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Notas (opcional)</label>
+                <input placeholder="Ej: Viaje a obra, mantención, etc." value={newRecord.notas} onChange={(e) => setNewRecord({ ...newRecord, notas: e.target.value })}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowForm(false)}
+                  style={{ flex: 1, background: "#F3F2F1", color: "#605E5C", border: "none", borderRadius: 6, padding: "11px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancelar
+                </button>
+                <button onClick={submitRecord} disabled={saving}
+                  style={{ flex: 2, background: saving ? "#A19F9D" : "#2564CF", color: "white", border: "none", borderRadius: 6, padding: "11px", fontSize: 13, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                  {saving ? "Guardando..." : "Guardar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Historial propio */}
+        {records.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#A19F9D", letterSpacing: 0.5, marginBottom: 10 }}>MIS REGISTROS</div>
+            {records.map((r, i) => (
+              <div key={r.id} style={{ background: "white", borderRadius: 8, padding: "12px 16px", marginBottom: 8, border: "1px solid #EDEBE9", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: i === 0 ? "#2564CF" : "#F3F2F1", color: i === 0 ? "white" : "#605E5C", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                  {i === 0 ? "★" : i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1F1F1F" }}>{r.km_actual?.toLocaleString("es-CL")} km</div>
+                  <div style={{ fontSize: 11, color: "#A19F9D" }}>
+                    {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
+                    {r.km_recorrido > 0 && <span style={{ color: "#107C10", marginLeft: 8 }}>+{r.km_recorrido?.toLocaleString("es-CL")} km</span>}
+                  </div>
+                  {r.notas && <div style={{ fontSize: 11, color: "#605E5C", marginTop: 2 }}>{r.notas}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── MÓDULO KILOMETRAJE ────────────────────────────────────────────────────────
+function KilometrajeModule() {
+  const [drivers, setDrivers] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [showDriverForm, setShowDriverForm] = useState(false);
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [newDriver, setNewDriver] = useState({ nombre: "", vehiculo: "", patente: "" });
+  const [newRecord, setNewRecord] = useState({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+  const [copiedDriver, setCopiedDriver] = useState(null);
+
+  const TD = {
+    blue: "#2564CF", sidebar: "#F3F2F1", sidebarHover: "#EAEAEA",
+    sidebarActive: "#E3EEFB", text: "#1F1F1F", muted: "#605E5C",
+    light: "#A19F9D", border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
+  };
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, "km_drivers"), (snap) => {
+      setDrivers(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    });
+    const u2 = onSnapshot(collection(db, "km_records"), (snap) => {
+      setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { u1(); u2(); };
+  }, []);
+
+  const addDriver = async () => {
+    if (!newDriver.nombre.trim()) return;
+    await addDoc(collection(db, "km_drivers"), { ...newDriver, createdAt: new Date().toISOString() });
+    setNewDriver({ nombre: "", vehiculo: "", patente: "" });
+    setShowDriverForm(false);
+  };
+
+  const deleteDriver = async (id) => {
+    if (!window.confirm("¿Eliminar este conductor y todos sus registros?")) return;
+    await deleteDoc(doc(db, "km_drivers", id));
+    const toDelete = records.filter((r) => r.driverId === id);
+    await Promise.all(toDelete.map((r) => deleteDoc(doc(db, "km_records", r.id))));
+    if (selectedDriver?.id === id) setSelectedDriver(null);
+  };
+
+  const addRecord = async () => {
+    if (!newRecord.fecha || !newRecord.km_actual) return alert("Ingresa fecha y kilometraje.");
+    const driverRecords = getDriverRecords(selectedDriver.id);
+    const lastKm = driverRecords[0]?.km_actual || 0;
+    const km_actual = parseFloat(newRecord.km_actual);
+    const km_recorrido = lastKm > 0 ? km_actual - lastKm : 0;
+    await addDoc(collection(db, "km_records"), {
+      ...newRecord,
+      driverId: selectedDriver.id,
+      driverNombre: selectedDriver.nombre,
+      km_actual,
+      km_recorrido: km_recorrido >= 0 ? km_recorrido : 0,
+      createdAt: new Date().toISOString(),
+    });
+    setNewRecord({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
+    setShowRecordForm(false);
+  };
+
+  const deleteRecord = async (id) => {
+    if (window.confirm("¿Eliminar este registro?")) await deleteDoc(doc(db, "km_records", id));
+  };
+
+  const getDriverRecords = (driverId) =>
+    records.filter((r) => r.driverId === driverId).sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  const copyLink = (driverId) => {
+    const link = `${window.location.origin}?km=${driverId}`;
+    navigator.clipboard.writeText(link);
+    setCopiedDriver(driverId);
+    setTimeout(() => setCopiedDriver(null), 2000);
+  };
+
+  const driverRecords = selectedDriver ? getDriverRecords(selectedDriver.id) : [];
+  const totalKm = driverRecords.reduce((s, r) => s + (r.km_recorrido || 0), 0);
+  const lastRecord = driverRecords[0];
+
+  return (
+    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* Sidebar conductores */}
+      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: `1px solid ${TD.border}` }}>
+        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>CONDUCTORES</div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {drivers.map((d) => {
+            const recs = getDriverRecords(d.id);
+            const last = recs[0];
+            const isActive = selectedDriver?.id === d.id;
+            return (
+              <div key={d.id} onClick={() => setSelectedDriver(d)}
+                style={{ padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: isActive ? TD.sidebarActive : "transparent", borderRadius: "0 4px 4px 0", marginRight: 8, transition: "background 0.1s" }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: TD.blue, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  {d.nombre.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
+                  <div style={{ fontSize: 11, color: TD.light }}>{d.patente || d.vehiculo || "Sin vehículo"}</div>
+                </div>
+                {isActive && (
+                  <span onClick={(e) => { e.stopPropagation(); deleteDriver(d.id); }} style={{ color: TD.light, cursor: "pointer", fontSize: 14 }}>×</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ padding: "8px 12px", borderTop: `1px solid ${TD.border}` }}>
+          {showDriverForm ? (
+            <div>
+              <input autoFocus value={newDriver.nombre} onChange={(e) => setNewDriver({ ...newDriver, nombre: e.target.value })}
+                onKeyDown={(e) => { if (e.key === "Enter") addDriver(); if (e.key === "Escape") setShowDriverForm(false); }}
+                placeholder="Nombre del conductor *"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newDriver.vehiculo} onChange={(e) => setNewDriver({ ...newDriver, vehiculo: e.target.value })}
+                placeholder="Vehículo (ej: Toyota Hilux)"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <input value={newDriver.patente} onChange={(e) => setNewDriver({ ...newDriver, patente: e.target.value })}
+                placeholder="Patente"
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={addDriver} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
+                <button onClick={() => setShowDriverForm(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowDriverForm(true)}
+              style={{ width: "100%", background: "none", border: "none", color: TD.muted, borderRadius: 4, padding: "7px 4px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16, color: TD.blue }}>+</span> Nuevo conductor
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Panel central */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
+        {!selectedDriver ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12 }}>
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#EDEBE9" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div style={{ fontSize: 15, color: TD.muted }}>Selecciona un conductor para ver su historial</div>
+            <div style={{ fontSize: 13, color: TD.light, maxWidth: 380, textAlign: "center" }}>
+              Cada conductor tiene un link personalizado para registrar su kilometraje desde su celular
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: "20px 28px 0" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>{selectedDriver.nombre}</div>
+                <button onClick={() => copyLink(selectedDriver.id)}
+                  style={{ background: copiedDriver === selectedDriver.id ? "#107C10" : TD.blue, color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  {copiedDriver === selectedDriver.id ? "¡Copiado!" : "Copiar link del conductor"}
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+                {selectedDriver.vehiculo && <span style={{ fontSize: 12, color: TD.muted }}>🚗 {selectedDriver.vehiculo}</span>}
+                {selectedDriver.patente && <span style={{ fontSize: 12, color: TD.muted }}>🔖 {selectedDriver.patente}</span>}
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: "Registros", value: driverRecords.length, icon: "📋" },
+                  { label: "KM recorridos", value: totalKm.toLocaleString("es-CL") + " km", icon: "📍" },
+                  { label: "Último registro", value: lastRecord ? new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL") : "—", icon: "📅" },
+                  { label: "KM actual", value: lastRecord ? lastRecord.km_actual?.toLocaleString("es-CL") + " km" : "—", icon: "🔢" },
+                ].map((s) => (
+                  <div key={s.label} style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 8, padding: "12px 16px", flex: 1 }}>
+                    <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: TD.text }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: TD.light }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Formulario inline */}
+              <div style={{ background: TD.bg, border: `1px solid ${TD.border}`, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
+                {showRecordForm ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <input type="date" value={newRecord.fecha} onChange={(e) => setNewRecord({ ...newRecord, fecha: e.target.value })}
+                      style={{ padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <input type="number" placeholder="KM actual del vehículo" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
+                      style={{ width: 160, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <input placeholder="Notas (opcional)" value={newRecord.notas} onChange={(e) => setNewRecord({ ...newRecord, notas: e.target.value })}
+                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: `1px solid ${TD.border}`, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
+                    <button onClick={addRecord} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px 14px", fontSize: 13, cursor: "pointer" }}>Registrar</button>
+                    <button onClick={() => setShowRecordForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setShowRecordForm(true)}>
+                    <span style={{ fontSize: 18, color: TD.blue }}>+</span>
+                    <span style={{ fontSize: 14, color: TD.muted }}>Registrar kilometraje</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Historial */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 28px 20px" }}>
+              {driverRecords.length === 0 ? (
+                <div style={{ color: TD.light, fontSize: 13, textAlign: "center", padding: "40px 0" }}>Sin registros aún</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid ${TD.border}` }}>
+                      {["Fecha", "KM actual", "KM recorridos", "Notas", ""].map((h) => (
+                        <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {driverRecords.map((r, i) => (
+                      <tr key={r.id} style={{ borderBottom: `1px solid ${TD.border}`, background: i === 0 ? "#F0F7FF" : "transparent" }}>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 600 : 400 }}>
+                          {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
+                          {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: TD.blue, color: "white", borderRadius: 3, padding: "1px 6px" }}>Último</span>}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: 600 }}>{r.km_actual?.toLocaleString("es-CL")} km</td>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: r.km_recorrido > 0 ? "#107C10" : TD.light, fontWeight: 500 }}>
+                          {r.km_recorrido > 0 ? `+${r.km_recorrido?.toLocaleString("es-CL")} km` : "—"}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{r.notas || "—"}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          <button onClick={() => deleteRecord(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 14 }}>×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [tasks, setTasks] = useState({});
   const [categories, setCategories] = useState({});
@@ -839,10 +1268,16 @@ export default function App() {
   const [draggedTask, setDraggedTask] = useState(null);
   const [dragOverPriority, setDragOverPriority] = useState(null);
   const [activeModule, setActiveModule] = useState("tareas");
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [comments, setComments] = useState({});
+  const [newComment, setNewComment] = useState("");
+  const [commentAuthor, setCommentAuthor] = useState("");
 
   const urlParams = new URLSearchParams(window.location.search);
   const cotizacionId = urlParams.get("cotizacion");
   if (cotizacionId) return <ContractorPage quoteId={cotizacionId} />;
+  const kmDriverId = urlParams.get("km");
+  if (kmDriverId) return <DriverPage driverId={kmDriverId} />;
 
   useEffect(() => {
     let taskUnsubs = [], catUnsubs = [];
@@ -915,6 +1350,27 @@ export default function App() {
     await updateDoc(doc(db, `tasks_${specId}`, taskId), updateData);
   };
 
+  // Load comments for selected task
+  useEffect(() => {
+    if (!selectedTask) return;
+    const unsub = onSnapshot(collection(db, `comments_${selectedTask.specId}_${selectedTask.id}`), (snap) => {
+      const c = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      setComments((prev) => ({ ...prev, [`${selectedTask.specId}_${selectedTask.id}`]: c }));
+    });
+    return () => unsub();
+  }, [selectedTask]);
+
+  const addComment = async () => {
+    if (!newComment.trim() || !selectedTask) return;
+    await addDoc(collection(db, `comments_${selectedTask.specId}_${selectedTask.id}`), {
+      text: newComment,
+      author: commentAuthor || "Anónimo",
+      createdAt: new Date().toISOString(),
+      createdAtDisplay: new Date().toLocaleString("es-CL"),
+    });
+    setNewComment("");
+  };
+
   const addCategory = async () => {
     if (!newCategoryName.trim() || !selectedSpec) return;
     const catId = `cat_${Date.now()}`;
@@ -956,15 +1412,35 @@ export default function App() {
           <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
-        {["tareas", "cotizaciones", "gas"].map((mod) => (
+        {["tareas", "cotizaciones", "gas", "kilometraje"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") setSelectedSpec(null); }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "Tareas" : mod === "cotizaciones" ? "Cotizaciones" : "🔥 Gas"}
+            {mod === "tareas" ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                Tareas
+              </span>
+            ) : mod === "cotizaciones" ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Cotizaciones
+              </span>
+            ) : mod === "gas" ? (
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 22V8l9-6 9 6v14"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><rect x="9" y="12" width="6" height="10"/></svg>
+                Gas
+              </span>
+            ) : (
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Kilometraje
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {activeModule === "cotizaciones" ? <QuotesModule /> : activeModule === "gas" ? <GasModule /> : !selectedSpec ? (
+      {activeModule === "cotizaciones" ? <QuotesModule /> : activeModule === "gas" ? <GasModule /> : activeModule === "kilometraje" ? <KilometrajeModule /> : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
           <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>ESPECIALISTAS DE SOPORTE</div>
@@ -1037,9 +1513,9 @@ export default function App() {
               {showCategoryInput ? (
                 <div>
                   <input autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") addCategory(); if (e.key === "Escape") setShowCategoryInput(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { addCategory(); } else if (e.key === "Escape") { setShowCategoryInput(false); } }}
                     placeholder="Nombre de la lista..."
-                    style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.blue}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
+                    style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", outline: "none" }} />
                   <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                     <button onClick={addCategory} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
                     <button onClick={() => setShowCategoryInput(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
@@ -1055,6 +1531,7 @@ export default function App() {
           </div>
 
           {/* Panel central - To Do style */}
+          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
 
             {/* Header lista */}
@@ -1136,15 +1613,15 @@ export default function App() {
                           <div key={task.id} draggable
                             onDragStart={(e) => { setDraggedTask(task); e.dataTransfer.effectAllowed = "move"; }}
                             onDragEnd={() => { setDraggedTask(null); setDragOverPriority(null); }}
-                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}`, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = TD.bg; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "9px 4px", borderBottom: `1px solid ${TD.border}`, cursor: "grab", opacity: draggedTask?.id === task.id ? 0.3 : 1, transition: "opacity 0.1s", background: selectedTask?.id === task.id ? TD.sidebarActive : "transparent" }}
+                            onMouseEnter={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = TD.bg; }}
+                            onMouseLeave={(e) => { if (selectedTask?.id !== task.id) e.currentTarget.style.background = "transparent"; }}>
                             <div onClick={() => toggleStatus(selectedSpec.id, task.id, task.status)}
                               style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${TD.border}`, background: "white", cursor: "pointer", flexShrink: 0, marginTop: 1, transition: "border-color 0.1s" }}
                               onMouseEnter={(e) => { e.currentTarget.style.borderColor = pc.color; }}
                               onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, color: TD.text, fontWeight: 500, marginBottom: task.notes ? 2 : 0 }}>{task.title}</div>
+                              <div onClick={(e) => { e.stopPropagation(); setSelectedTask(selectedTask?.id === task.id ? null : { ...task, specId: selectedSpec.id }); setNewComment(""); }} style={{ fontSize: 14, color: TD.text, fontWeight: 500, marginBottom: task.notes ? 2 : 0, cursor: "pointer" }}>{task.title} <span style={{ fontSize: 10, color: TD.light }}>💬</span></div>
                               {task.notes && <div style={{ fontSize: 11, color: TD.muted }}>{task.notes}</div>}
                               <div style={{ fontSize: 11, color: TD.light, marginTop: 2 }}>
                                 {task.assignedBy && <span>{task.assignedBy} · </span>}
@@ -1163,6 +1640,49 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+          {/* Comment Panel */}
+          {selectedTask && (
+            <div style={{ width: 300, background: "#FAFAFA", borderLeft: `1px solid ${TD.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${TD.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: TD.text }}>💬 Comentarios</div>
+                <button onClick={() => setSelectedTask(null)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 16 }}>×</button>
+              </div>
+              <div style={{ padding: "12px 16px", borderBottom: `1px solid ${TD.border}`, background: TD.white }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: TD.text, marginBottom: 2 }}>{selectedTask.title}</div>
+                {selectedTask.notes && <div style={{ fontSize: 11, color: TD.muted }}>{selectedTask.notes}</div>}
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
+                {(comments[`${selectedTask.specId}_${selectedTask.id}`] || []).length === 0 ? (
+                  <div style={{ color: TD.light, fontSize: 12, textAlign: "center", padding: "24px 0" }}>Sin comentarios aún</div>
+                ) : (comments[`${selectedTask.specId}_${selectedTask.id}`] || []).map((c) => (
+                  <div key={c.id} style={{ marginBottom: 12, background: TD.white, borderRadius: 8, padding: "10px 12px", border: `1px solid ${TD.border}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", background: TD.blue, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{c.author.charAt(0).toUpperCase()}</div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: TD.text }}>{c.author}</span>
+                      <span style={{ fontSize: 10, color: TD.light }}>{c.createdAtDisplay}</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: TD.text, lineHeight: 1.5 }}>{c.text}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "12px 16px", borderTop: `1px solid ${TD.border}` }}>
+                <input value={commentAuthor} onChange={(e) => setCommentAuthor(e.target.value)}
+                  placeholder="Tu nombre"
+                  style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }}
+                  placeholder="Escribe un comentario... (Enter para enviar)"
+                  rows={3} style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: `1px solid ${TD.border}`, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", resize: "none", marginBottom: 6 }} />
+                <button onClick={addComment} disabled={!newComment.trim()}
+                  style={{ width: "100%", background: newComment.trim() ? TD.blue : TD.border, color: "white", border: "none", borderRadius: 4, padding: "7px", fontSize: 12, cursor: newComment.trim() ? "pointer" : "default", fontFamily: "inherit" }}>
+                  Agregar comentario
+                </button>
+              </div>
+            </div>
+          )}
           </div>
         </div>
       )}
