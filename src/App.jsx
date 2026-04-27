@@ -1627,7 +1627,6 @@ export default function App() {
               )}
             </div>
           </div>
-        </div>
 
           {/* Comment Panel */}
           {selectedTask && (
