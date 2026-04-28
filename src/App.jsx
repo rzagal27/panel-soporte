@@ -230,6 +230,8 @@ function QuotesModule() {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [editQuote, setEditQuote] = useState(null);
+  const [editItems, setEditItems] = useState([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "cotizaciones"), (snapshot) => {
@@ -326,6 +328,23 @@ function QuotesModule() {
     if (window.confirm("¿Eliminar esta solicitud?")) await deleteDoc(doc(db, "cotizaciones", id));
   };
 
+  const openEditQuote = (quote) => {
+    setEditQuote(quote);
+    setEditItems(quote.items ? [...quote.items] : [{ descripcion: "", cantidad: "", unidad: "un" }]);
+  };
+
+  const saveEditQuote = async () => {
+    if (!editQuote) return;
+    const validItems = editItems.filter((it) => it.descripcion.trim());
+    await updateDoc(doc(db, "cotizaciones", editQuote.id), { items: validItems });
+    setEditQuote(null);
+    setEditItems([]);
+  };
+
+  const addEditItem = () => setEditItems([...editItems, { descripcion: "", cantidad: "", unidad: "un" }]);
+  const removeEditItem = (i) => setEditItems(editItems.filter((_, idx) => idx !== i));
+  const updateEditItem = (i, field, value) => setEditItems(editItems.map((it, idx) => idx === i ? { ...it, [field]: value } : it));
+
   const activas = quotes.filter((q) => q.estado === "pendiente" || q.estado === "cotizado");
   const aprobadas = quotes.filter((q) => q.estado === "aprobado");
   const rechazadas = quotes.filter((q) => q.estado === "rechazado");
@@ -363,6 +382,58 @@ function QuotesModule() {
               <button onClick={confirmDecision} disabled={sending}
                 style={{ flex: 2, background: confirmModal.decision === "aprobado" ? "#27AE60" : "#E74C3C", color: "white", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, cursor: sending ? "not-allowed" : "pointer", fontWeight: "bold", opacity: sending ? 0.7 : 1 }}>
                 {sending ? "Enviando..." : "Confirmar y enviar correo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar ítems */}
+      {editQuote && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "white", borderRadius: 16, padding: 32, maxWidth: 620, width: "90%", boxShadow: "0 8px 40px rgba(0,0,0,0.2)", maxHeight: "85vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1F1F1F", marginBottom: 4 }}>Editar ítems</div>
+            <div style={{ fontSize: 13, color: "#605E5C", marginBottom: 20 }}>Cita N° {editQuote.numero_cita} · {editQuote.descripcion}</div>
+
+            {/* Header tabla */}
+            <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 32px", gap: 8, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: "#A19F9D", paddingLeft: 4 }}>Descripción</div>
+              <div style={{ fontSize: 11, color: "#A19F9D" }}>Cantidad</div>
+              <div style={{ fontSize: 11, color: "#A19F9D" }}>Unidad</div>
+              <div />
+            </div>
+
+            {editItems.map((item, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1fr 32px", gap: 8, marginBottom: 8 }}>
+                <input placeholder={"Ítem " + (i + 1)} value={item.descripcion}
+                  onChange={(e) => updateEditItem(i, "descripcion", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #EDEBE9", fontSize: 13, fontFamily: "inherit" }} />
+                <input type="number" placeholder="0" value={item.cantidad}
+                  onChange={(e) => updateEditItem(i, "cantidad", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #EDEBE9", fontSize: 13, textAlign: "center" }} />
+                <select value={item.unidad} onChange={(e) => updateEditItem(i, "unidad", e.target.value)}
+                  style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid #EDEBE9", fontSize: 13 }}>
+                  {["un", "m²", "m³", "ml", "gl", "kg", "ton", "hr", "día", "mes"].map((u) => <option key={u}>{u}</option>)}
+                </select>
+                {editItems.length > 1 ? (
+                  <button onClick={() => removeEditItem(i)} style={{ background: "none", border: "none", color: "#A19F9D", cursor: "pointer", fontSize: 18, padding: 0 }}>×</button>
+                ) : <div />}
+              </div>
+            ))}
+
+            <button onClick={addEditItem}
+              style={{ background: "none", border: "1px dashed #EDEBE9", color: "#605E5C", borderRadius: 8, padding: "7px 16px", fontSize: 12, cursor: "pointer", marginBottom: 20, width: "100%" }}>
+              + Agregar ítem
+            </button>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setEditQuote(null)}
+                style={{ flex: 1, background: "#F3F2F1", color: "#605E5C", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, cursor: "pointer" }}>
+                Cancelar
+              </button>
+              <button onClick={saveEditQuote}
+                style={{ flex: 2, background: "#2564CF", color: "white", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
+                Guardar cambios
               </button>
             </div>
           </div>
