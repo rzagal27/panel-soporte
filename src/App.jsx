@@ -580,6 +580,10 @@ function QuotesModule() {
                     style={{ background: copiedId === quote.id ? "#27AE60" : "#F0EDE8", color: copiedId === quote.id ? "white" : "#555", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
                     {copiedId === quote.id ? "✓ Copiado" : "🔗 Link"}
                   </button>
+                  <button onClick={() => openEditQuote(quote)}
+                    style={{ background: "#EEF3FB", color: "#2564CF", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600 }}>
+                    ✏️ Editar
+                  </button>
                   {sorted.length > 0 && (
                     <button onClick={() => setExpandedQuote(isExpanded ? null : quote.id)}
                       style={{ background: "#F5F5F5", color: "#555", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
