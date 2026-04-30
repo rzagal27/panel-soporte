@@ -982,6 +982,9 @@ function SupervisorPage({ supId }) {
   const handleKmChange = (patente, value) =>
     setKmInputs((prev) => ({ ...prev, [patente]: value }));
 
+  const cancelKmEdit = (patente) =>
+    setKmInputs((prev) => { const n = { ...prev }; delete n[patente]; return n; });
+
   const handleGuardar = async () => {
     setSaving(true);
     const todosLosVehiculos = [
@@ -1065,7 +1068,7 @@ function SupervisorPage({ supId }) {
                 </div>
                 <div style={{ fontSize: 13, color: "#605E5C", fontWeight: 600 }}>{v.patente}</div>
                 <div>
-                  {existing && !kmInputs[v.patente] ? (
+                  {existing && !(v.patente in kmInputs) ? (
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{existing.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</div>
                       <div style={{ fontSize: 10, color: "#A19F9D" }}>
