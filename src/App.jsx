@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
 import * as XLSX from "xlsx";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType } from "docx";
 
 const EMAILJS_SERVICE = "service_uv11blm";
 const EMAILJS_TEMPLATE = "template_d1t0lp9";
@@ -1469,7 +1470,7 @@ function KilometrajeModule() {
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {GRUPOS_KM.filter((g) => !g.tipo).map((g) => {
-            const isActive = selectedGrupo?.supervisorId === g.supervisorId;
+            const isActive = (selectedGrupo && selectedGrupo.supervisorId === g.supervisorId);
             const stats = getGrupoStats(g);
             const allDone = stats.registrados === stats.total;
             return (
@@ -1489,7 +1490,7 @@ function KilometrajeModule() {
           })}
           <div style={{ padding: "12px 16px 4px", fontSize: 11, fontWeight: 700, color: TD.light, letterSpacing: 0.5, marginTop: 8 }}>GERENTES INDIVIDUALES</div>
           {GRUPOS_KM.filter((g) => g.tipo === "individual").map((g) => {
-            const isActive = selectedGrupo?.supervisorId === g.supervisorId;
+            const isActive = (selectedGrupo && selectedGrupo.supervisorId === g.supervisorId);
             const rec = records.find((r) => r.patente === g.supervisorPatente && r.mes === selectedMes);
             return (
               <div key={g.supervisorId} onClick={() => setSelectedGrupo(g)}
@@ -1541,7 +1542,7 @@ function KilometrajeModule() {
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid " + TD.border }}>
-                    {["Nombre", "Cargo", "Patente", "KM " + (MESES_2026.find((m) => m.value === selectedMes)?.label || "")].map((h) => (
+                    {["Nombre", "Cargo", "Patente", "KM " + ((MESES_2026.find((m) => m.value === selectedMes) || {}).label || "")].map((h) => (
                       <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -1557,7 +1558,7 @@ function KilometrajeModule() {
                         <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>{v.patente}</td>
                         <td style={{ padding: "10px 12px" }}>
                           {rec ? (
-                            <span style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{rec.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{(rec.km_actual ? rec.km_actual.toLocaleString("es-CL", {maximumFractionDigits: 0}) : "")} km</span>
                           ) : (
                             <span style={{ fontSize: 12, color: TD.light, fontStyle: "italic" }}>Pendiente</span>
                           )}
@@ -1575,6 +1576,366 @@ function KilometrajeModule() {
   );
 }
 
+
+
+// ── MÓDULO EETT ───────────────────────────────────────────────────────────────
+function EETTModule() {
+  const [eetts, setEetts] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("chat"); // "chat" | "admin"
+  const [showUpload, setShowUpload] = useState(false);
+  const [newEett, setNewEett] = useState({ titulo: "", categoria: "", contenido: "" });
+  const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const messagesEndRef = React.useRef(null);
+
+  const TD = {
+    blue: "#2564CF", sidebar: "#F3F2F1", sidebarHover: "#EAEAEA",
+    sidebarActive: "#E3EEFB", text: "#1F1F1F", muted: "#605E5C",
+    light: "#A19F9D", border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
+  };
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "eetts"), (snap) => {
+      setEetts(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.titulo.localeCompare(b.titulo)));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const saveEett = async () => {
+    if (!newEett.titulo.trim() || !newEett.contenido.trim()) return alert("Ingresa título y contenido.");
+    setUploading(true);
+    await addDoc(collection(db, "eetts"), {
+      ...newEett,
+      createdAt: new Date().toISOString(),
+    });
+    setNewEett({ titulo: "", categoria: "", contenido: "" });
+    setShowUpload(false);
+    setUploading(false);
+  };
+
+  const deleteEett = async (id) => {
+    if (window.confirm("¿Eliminar esta EETT?")) await deleteDoc(doc(db, "eetts", id));
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role: "user", content: input };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    try {
+      // Build context from all EETTs
+      const eettContext = eetts.length > 0
+        ? "ESPECIFICACIONES TÉCNICAS BASE DISPONIBLES:\n\n" + eetts.map((e) => `[${e.categoria || "General"}] ${e.titulo}:\n${e.contenido}`).join("\n\n---\n\n")
+        : "No hay EETT base cargadas aún.";
+
+      const systemPrompt = `Eres un asistente experto en especificaciones técnicas para proyectos de construcción y mantención de edificios en Chile.
+
+Tu función es ayudar a generar Especificaciones Técnicas (EETT) para proyectos, basándote en las EETT estandarizadas que tienes disponibles.
+
+${eettContext}
+
+INSTRUCCIONES:
+1. Cuando el usuario describa un proyecto, analiza qué partidas necesita
+2. Si necesitas más información para generar una EETT de calidad, haz preguntas específicas
+3. Genera las EETT adaptadas al proyecto específico, usando las EETT base como referencia
+4. Sé preciso y técnico en las especificaciones
+5. Usa formato claro con secciones y subsecciones
+6. Si el usuario pide generar el documento final, responde con "DOCUMENTO_LISTO:" seguido del contenido completo formateado
+7. Responde siempre en español`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+
+      const data = await response.json();
+      const assistantMsg = { role: "assistant", content: data.content[0].text };
+      setMessages([...newMessages, assistantMsg]);
+    } catch (e) {
+      console.error(e);
+      setMessages([...newMessages, { role: "assistant", content: "Error al conectar con el asistente. Intenta nuevamente." }]);
+    }
+    setLoading(false);
+  };
+
+  const generateWord = async () => {
+    setGenerating(true);
+    // Get last assistant message as content
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant) { alert("Primero genera las EETT en el chat."); setGenerating(false); return; }
+
+    const content = lastAssistant.content.replace("DOCUMENTO_LISTO:", "").trim();
+    const lines = content.split("\n");
+
+    const children = [];
+
+    // Title
+    children.push(new Paragraph({
+      text: "ESPECIFICACIONES TÉCNICAS",
+      heading: HeadingLevel.HEADING_1,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+    }));
+
+    children.push(new Paragraph({
+      text: new Date().toLocaleDateString("es-CL"),
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 600 },
+    }));
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        children.push(new Paragraph({ text: "", spacing: { after: 100 } }));
+      } else if (trimmed.startsWith("# ")) {
+        children.push(new Paragraph({
+          text: trimmed.replace("# ", ""),
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 },
+        }));
+      } else if (trimmed.startsWith("## ")) {
+        children.push(new Paragraph({
+          text: trimmed.replace("## ", ""),
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 150 },
+        }));
+      } else if (trimmed.startsWith("### ")) {
+        children.push(new Paragraph({
+          text: trimmed.replace("### ", ""),
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 200, after: 100 },
+        }));
+      } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+        children.push(new Paragraph({
+          text: trimmed.replace(/^[-*] /, ""),
+          bullet: { level: 0 },
+          spacing: { after: 80 },
+        }));
+      } else if (/^\d+\./.test(trimmed)) {
+        children.push(new Paragraph({
+          text: trimmed,
+          numbering: { reference: "default-numbering", level: 0 },
+          spacing: { after: 80 },
+        }));
+      } else if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: trimmed.replace(/\*\*/g, ""), bold: true })],
+          spacing: { after: 100 },
+        }));
+      } else {
+        children.push(new Paragraph({
+          children: [new TextRun({ text: trimmed })],
+          spacing: { after: 100 },
+        }));
+      }
+    });
+
+    const doc = new Document({
+      sections: [{ properties: {}, children }],
+      styles: {
+        paragraphStyles: [
+          { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { size: 28, bold: true, color: "1F3864" }, paragraph: { spacing: { before: 400, after: 200 } } },
+          { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", run: { size: 24, bold: true, color: "2564CF" }, paragraph: { spacing: { before: 300, after: 150 } } },
+          { id: "Heading3", name: "Heading 3", basedOn: "Normal", next: "Normal", run: { size: 22, bold: true, color: "444444" }, paragraph: { spacing: { before: 200, after: 100 } } },
+        ],
+      },
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "EETT_Proyecto_" + new Date().toLocaleDateString("es-CL").replace(/\//g, "-") + ".docx";
+    a.click();
+    URL.revokeObjectURL(url);
+    setGenerating(false);
+  };
+
+  const CATEGORIAS = ["Obras civiles", "Instalaciones eléctricas", "Instalaciones sanitarias", "Climatización", "Automatización", "Pintura y revestimientos", "Exterior", "General"];
+
+  return (
+    <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+      {/* Sidebar */}
+      <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid " + TD.border }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {["chat", "admin"].map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                style={{ flex: 1, padding: "6px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", background: activeTab === tab ? TD.blue : TD.sidebarHover, color: activeTab === tab ? "white" : TD.muted, fontWeight: activeTab === tab ? 700 : 400 }}>
+                {tab === "chat" ? "💬 Chat" : "📁 EETT Base"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === "chat" ? (
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
+            <div style={{ fontSize: 11, color: TD.light, marginBottom: 12, fontWeight: 600 }}>EETT CARGADAS ({eetts.length})</div>
+            {eetts.length === 0 ? (
+              <div style={{ fontSize: 12, color: TD.light, fontStyle: "italic" }}>Sin EETT base cargadas</div>
+            ) : eetts.map((e) => (
+              <div key={e.id} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: TD.text, fontWeight: 600 }}>{e.titulo}</div>
+                {e.categoria && <div style={{ fontSize: 10, color: TD.light }}>{e.categoria}</div>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <div style={{ padding: "10px 12px", borderBottom: "1px solid " + TD.border }}>
+              <button onClick={() => setShowUpload(!showUpload)}
+                style={{ width: "100%", background: TD.blue, color: "white", border: "none", borderRadius: 6, padding: "8px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                + Nueva EETT
+              </button>
+            </div>
+            {showUpload && (
+              <div style={{ padding: "12px", borderBottom: "1px solid " + TD.border }}>
+                <input placeholder="Título *" value={newEett.titulo} onChange={(e) => setNewEett({ ...newEett, titulo: e.target.value })}
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
+                <select value={newEett.categoria} onChange={(e) => setNewEett({ ...newEett, categoria: e.target.value })}
+                  style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }}>
+                  <option value="">Categoría...</option>
+                  {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+                </select>
+                <textarea placeholder="Pega aquí el contenido de la EETT *" value={newEett.contenido} onChange={(e) => setNewEett({ ...newEett, contenido: e.target.value })}
+                  rows={6} style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical", marginBottom: 6 }} />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={saveEett} disabled={uploading}
+                    style={{ flex: 1, background: "#107C10", color: "white", border: "none", borderRadius: 4, padding: "6px", fontSize: 11, cursor: "pointer" }}>
+                    {uploading ? "Guardando..." : "Guardar"}
+                  </button>
+                  <button onClick={() => setShowUpload(false)}
+                    style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "6px", fontSize: 11, cursor: "pointer" }}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            <div style={{ padding: "8px 12px" }}>
+              {eetts.map((e) => (
+                <div key={e.id} style={{ padding: "8px", background: TD.white, borderRadius: 6, marginBottom: 6, border: "1px solid " + TD.border }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: TD.text }}>{e.titulo}</div>
+                      {e.categoria && <div style={{ fontSize: 10, color: TD.light }}>{e.categoria}</div>}
+                    </div>
+                    <button onClick={() => deleteEett(e.id)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14, padding: 0, flexShrink: 0 }}>×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Chat panel */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
+        {/* Header */}
+        <div style={{ padding: "16px 28px", borderBottom: "1px solid " + TD.border, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>Generador de EETT</div>
+            <div style={{ fontSize: 12, color: TD.muted }}>Describe tu proyecto y el asistente generará las especificaciones técnicas</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setMessages([])}
+              style={{ background: TD.bg, color: TD.muted, border: "1px solid " + TD.border, borderRadius: 6, padding: "7px 14px", fontSize: 12, cursor: "pointer" }}>
+              🗑 Limpiar
+            </button>
+            <button onClick={generateWord} disabled={generating || messages.length === 0}
+              style={{ background: messages.length > 0 ? "#107C10" : TD.light, color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 12, cursor: messages.length > 0 ? "pointer" : "not-allowed", fontWeight: 700 }}>
+              {generating ? "Generando..." : "📄 Descargar Word"}
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
+          {messages.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16, color: TD.muted }}>
+              <div style={{ fontSize: 48 }}>📋</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: TD.text }}>Generador de Especificaciones Técnicas</div>
+              <div style={{ fontSize: 13, textAlign: "center", maxWidth: 480, lineHeight: 1.6 }}>
+                Describe el proyecto que necesitas. Por ejemplo:<br />
+                <em style={{ color: TD.blue }}>"Necesito EETT para un proyecto que incluye pintura interior, cambio de porcelanato y automatización de portón eléctrico"</em>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 8 }}>
+                {["Pintura interior y exterior", "Cambio de pavimentos", "Instalación eléctrica", "Automatización accesos"].map((s) => (
+                  <button key={s} onClick={() => setInput(s)}
+                    style={{ background: TD.sidebarActive, color: TD.blue, border: "none", borderRadius: 20, padding: "6px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((msg, i) => (
+              <div key={i} style={{ marginBottom: 20, display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", gap: 12 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: msg.role === "user" ? TD.blue : "#107C10", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+                  {msg.role === "user" ? "👤" : "🤖"}
+                </div>
+                <div style={{ maxWidth: "75%", background: msg.role === "user" ? TD.sidebarActive : TD.bg, borderRadius: msg.role === "user" ? "12px 2px 12px 12px" : "2px 12px 12px 12px", padding: "12px 16px", border: "1px solid " + TD.border }}>
+                  <div style={{ fontSize: 13, color: TD.text, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                    {msg.content.replace("DOCUMENTO_LISTO:", "").trim()}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+          {loading && (
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#107C10", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🤖</div>
+              <div style={{ background: TD.bg, borderRadius: "2px 12px 12px 12px", padding: "12px 16px", border: "1px solid " + TD.border }}>
+                <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: TD.blue, animation: "pulse 1.4s infinite", animationDelay: i * 0.2 + "s" }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div style={{ padding: "16px 28px", borderTop: "1px solid " + TD.border, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              placeholder="Describe el proyecto o responde las preguntas del asistente... (Enter para enviar)"
+              rows={2}
+              style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid " + TD.border, fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", lineHeight: 1.5 }}
+            />
+            <button onClick={sendMessage} disabled={loading || !input.trim()}
+              style={{ background: input.trim() ? TD.blue : TD.light, color: "white", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 14, cursor: input.trim() ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700, height: 44, flexShrink: 0 }}>
+              Enviar
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: TD.light, marginTop: 6 }}>
+            Shift+Enter para nueva línea · Enter para enviar · Cuando estés listo, descarga el Word
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [tasks, setTasks] = useState({});
@@ -1735,10 +2096,10 @@ export default function App() {
           <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
-        {["tareas", "cotizaciones", "gas", "kilometraje"].map((mod) => (
-          <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") setSelectedSpec(null); }}
+        {["tareas", "cotizaciones", "gas", "kilometraje", "eett"].map((mod) => (
+          <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") { setSelectedSpec(null); } }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : "🚗 Kilometraje"}
+            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : "📋 EETT"}
           </button>
         ))}
       </div>
@@ -1749,6 +2110,8 @@ export default function App() {
         <GasModule />
       ) : activeModule === "kilometraje" ? (
         <KilometrajeModule />
+      ) : activeModule === "eett" ? (
+        <EETTModule />
       ) : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
