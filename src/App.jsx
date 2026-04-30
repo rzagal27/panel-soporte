@@ -923,6 +923,152 @@ function GasModule() {
 
 
 
+
+// ── PÁGINA PÚBLICA DEL SUPERVISOR ────────────────────────────────────────────
+function SupervisorPage({ supId }) {
+  const grupo = GRUPOS_KM.find((g) => g.supervisorId === supId);
+  const [records, setRecords] = useState([]);
+  const [selectedMes, setSelectedMes] = useState(MESES_2026[0].value);
+  const [kmInputs, setKmInputs] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "km_records"), (snap) => {
+      setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (!grupo) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "Segoe UI, sans-serif", color: "#A19F9D" }}>
+      Grupo no encontrado.
+    </div>
+  );
+
+  const getRecord = (patente, mes) =>
+    records.find((r) => r.patente === patente && r.mes === mes);
+
+  const handleKmChange = (patente, value) =>
+    setKmInputs((prev) => ({ ...prev, [patente]: value }));
+
+  const handleGuardar = async () => {
+    setSaving(true);
+    const todosLosVehiculos = [
+      { nombre: grupo.supervisor, patente: grupo.supervisorPatente },
+      ...grupo.conductores,
+    ];
+    for (const v of todosLosVehiculos) {
+      const km = kmInputs[v.patente];
+      if (!km) continue;
+      const existing = getRecord(v.patente, selectedMes);
+      const data = {
+        patente: v.patente,
+        nombre: v.nombre,
+        supervisorId: supId,
+        supervisor: grupo.supervisor,
+        mes: selectedMes,
+        km_actual: parseFloat(km),
+        updatedAt: new Date().toISOString(),
+      };
+      if (existing) {
+        await updateDoc(doc(db, "km_records", existing.id), data);
+      } else {
+        await addDoc(collection(db, "km_records"), { ...data, createdAt: new Date().toISOString() });
+      }
+    }
+    setKmInputs({});
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    setSaving(false);
+  };
+
+  const todosVehiculos = [
+    { nombre: grupo.supervisor, patente: grupo.supervisorPatente, esSupervisor: true },
+    ...grupo.conductores.map((c) => ({ ...c, esSupervisor: false })),
+  ];
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "Segoe UI, sans-serif", color: "#A19F9D" }}>Cargando...</div>
+  );
+
+  return (
+    <div style={{ fontFamily: "Segoe UI, system-ui, sans-serif", background: "#FAF9F8", minHeight: "100vh" }}>
+      {/* Header */}
+      <div style={{ background: "#2564CF", padding: "16px 24px" }}>
+        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 11, marginBottom: 4 }}>Registro de Kilometraje</div>
+        <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>{grupo.supervisor}</div>
+        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Equipo de {todosVehiculos.length} vehículos</div>
+      </div>
+
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 20px" }}>
+        {/* Selector de mes */}
+        <div style={{ background: "white", borderRadius: 10, padding: "16px 18px", marginBottom: 16, border: "1px solid #EDEBE9" }}>
+          <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 8, fontWeight: 600 }}>Selecciona el mes a registrar</label>
+          <select value={selectedMes} onChange={(e) => setSelectedMes(e.target.value)}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit" }}>
+            {MESES_2026.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
+
+        {/* Notificación guardado */}
+        {saved && (
+          <div style={{ background: "#DFF6DD", border: "1px solid #9FD89F", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#107C10", fontWeight: 600 }}>
+            ✓ Kilometraje guardado correctamente
+          </div>
+        )}
+
+        {/* Lista de vehículos */}
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #EDEBE9", overflow: "hidden", marginBottom: 16 }}>
+          <div style={{ padding: "12px 18px", background: "#F3F2F1", borderBottom: "1px solid #EDEBE9", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#605E5C" }}>NOMBRE</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#605E5C" }}>PATENTE</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#605E5C" }}>KM ACTUAL</div>
+          </div>
+          {todosVehiculos.map((v) => {
+            const existing = getRecord(v.patente, selectedMes);
+            return (
+              <div key={v.patente} style={{ padding: "12px 18px", borderBottom: "1px solid #F3F2F1", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "center", background: v.esSupervisor ? "#EEF3FB" : "white" }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: v.esSupervisor ? 700 : 400, color: "#1F1F1F" }}>{v.nombre}</div>
+                  {v.esSupervisor && <div style={{ fontSize: 10, color: "#2564CF", fontWeight: 600 }}>Supervisor</div>}
+                </div>
+                <div style={{ fontSize: 13, color: "#605E5C", fontWeight: 600 }}>{v.patente}</div>
+                <div>
+                  {existing && !kmInputs[v.patente] ? (
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{existing.km_actual?.toLocaleString("es-CL")} km</div>
+                      <div style={{ fontSize: 10, color: "#A19F9D" }}>
+                        Registrado
+                        <button onClick={() => handleKmChange(v.patente, existing.km_actual.toString())}
+                          style={{ marginLeft: 6, background: "none", border: "none", color: "#2564CF", fontSize: 10, cursor: "pointer", padding: 0 }}>
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <input type="number" placeholder="Ej: 125430"
+                      value={kmInputs[v.patente] || ""}
+                      onChange={(e) => handleKmChange(v.patente, e.target.value)}
+                      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid " + (kmInputs[v.patente] ? "#2564CF" : "#EDEBE9"), fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={handleGuardar} disabled={saving || Object.keys(kmInputs).length === 0}
+          style={{ width: "100%", background: Object.keys(kmInputs).length > 0 ? "#2564CF" : "#A19F9D", color: "white", border: "none", borderRadius: 8, padding: "14px", fontSize: 15, cursor: Object.keys(kmInputs).length > 0 ? "pointer" : "not-allowed", fontFamily: "inherit", fontWeight: 700 }}>
+          {saving ? "Guardando..." : "Guardar kilometraje"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── PÁGINA PÚBLICA DEL CONDUCTOR ─────────────────────────────────────────────
 function DriverPage({ driverId }) {
   const [driver, setDriver] = useState(null);
@@ -1091,16 +1237,79 @@ function DriverPage({ driverId }) {
   );
 }
 
+
+// ── DATOS PRECARGADOS DE CONDUCTORES ─────────────────────────────────────────
+const GRUPOS_KM = [
+  {
+    supervisor: "Auditio Neiculeo",
+    supervisorPatente: "TTHT34",
+    supervisorId: "sup_auditio",
+    conductores: [
+      { nombre: "José Mendez", patente: "TPZR22" },
+      { nombre: "Andrés Nuñez", patente: "TSTS74" },
+      { nombre: "Cesar Rosales", patente: "TPZR26" },
+      { nombre: "Carlos Ceballos", patente: "TSTS78" },
+      { nombre: "Marco Valdes", patente: "TPZR35" },
+      { nombre: "Diogenes Gutierrez", patente: "TST50" },
+    ]
+  },
+  {
+    supervisor: "Jose Rubilar",
+    supervisorPatente: "RYYP59",
+    supervisorId: "sup_rubilar",
+    conductores: [
+      { nombre: "Luis Hormazabal", patente: "TRLD83" },
+      { nombre: "Patricio Calderón", patente: "TRLD91" },
+      { nombre: "Bernardo Troncoso", patente: "TSCX68" },
+      { nombre: "Roberto Esparza", patente: "TPZR37" },
+      { nombre: "Martin Cartes", patente: "TSTS65" },
+      { nombre: "Sebastian Ponce", patente: "TRLD79" },
+    ]
+  },
+  {
+    supervisor: "Luis Perez",
+    supervisorPatente: "VHBT30",
+    supervisorId: "sup_lperez",
+    conductores: [
+      { nombre: "Nestor Ugartemendia", patente: "TRLD86" },
+      { nombre: "Manuel Guzman", patente: "TPZR34" },
+      { nombre: "Juan Valenzuela", patente: "TPZR10" },
+      { nombre: "Cristian Alvarez", patente: "TSCX93" },
+      { nombre: "Claudio Novoa", patente: "TSXL54" },
+      { nombre: "Javier Vejar", patente: "TSXL51" },
+    ]
+  },
+  {
+    supervisor: "Hernan Toledo",
+    supervisorPatente: "TBSR29",
+    supervisorId: "sup_htoledo",
+    conductores: [
+      { nombre: "Francisco Venegas", patente: "TSCX94" },
+      { nombre: "Juan Francisco Perez", patente: "TSTT96" },
+      { nombre: "Cervando Carillo", patente: "TSTS66" },
+      { nombre: "Patricio Leon", patente: "TSTS49" },
+    ]
+  },
+];
+
+const MESES_2026 = [
+  { value: "2026-04", label: "Abril 2026" },
+  { value: "2026-05", label: "Mayo 2026" },
+  { value: "2026-06", label: "Junio 2026" },
+  { value: "2026-07", label: "Julio 2026" },
+  { value: "2026-08", label: "Agosto 2026" },
+  { value: "2026-09", label: "Septiembre 2026" },
+  { value: "2026-10", label: "Octubre 2026" },
+  { value: "2026-11", label: "Noviembre 2026" },
+  { value: "2026-12", label: "Diciembre 2026" },
+];
+
 // ── MÓDULO KILOMETRAJE ────────────────────────────────────────────────────────
 function KilometrajeModule() {
-  const [drivers, setDrivers] = useState([]);
   const [records, setRecords] = useState([]);
-  const [selectedDriver, setSelectedDriver] = useState(null);
-  const [showDriverForm, setShowDriverForm] = useState(false);
-  const [showRecordForm, setShowRecordForm] = useState(false);
-  const [newDriver, setNewDriver] = useState({ nombre: "", vehiculo: "", patente: "" });
-  const [newRecord, setNewRecord] = useState({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
-  const [copiedDriver, setCopiedDriver] = useState(null);
+  const [selectedGrupo, setSelectedGrupo] = useState(null);
+  const [selectedMes, setSelectedMes] = useState(MESES_2026[0].value);
+  const [copiedSup, setCopiedSup] = useState(null);
 
   const TD = {
     blue: "#2564CF", sidebar: "#F3F2F1", sidebarHover: "#EAEAEA",
@@ -1109,219 +1318,116 @@ function KilometrajeModule() {
   };
 
   useEffect(() => {
-    const u1 = onSnapshot(collection(db, "km_drivers"), (snap) => {
-      setDrivers(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nombre.localeCompare(b.nombre)));
-    });
-    const u2 = onSnapshot(collection(db, "km_records"), (snap) => {
+    const unsub = onSnapshot(collection(db, "km_records"), (snap) => {
       setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { u1(); u2(); };
+    return () => unsub();
   }, []);
 
-  const addDriver = async () => {
-    if (!newDriver.nombre.trim()) return;
-    await addDoc(collection(db, "km_drivers"), { ...newDriver, createdAt: new Date().toISOString() });
-    setNewDriver({ nombre: "", vehiculo: "", patente: "" });
-    setShowDriverForm(false);
-  };
-
-  const deleteDriver = async (id) => {
-    if (!window.confirm("¿Eliminar este conductor y todos sus registros?")) return;
-    await deleteDoc(doc(db, "km_drivers", id));
-    const toDelete = records.filter((r) => r.driverId === id);
-    await Promise.all(toDelete.map((r) => deleteDoc(doc(db, "km_records", r.id))));
-    if (selectedDriver?.id === id) setSelectedDriver(null);
-  };
-
-  const addRecord = async () => {
-    if (!newRecord.fecha || !newRecord.km_actual) return alert("Ingresa fecha y kilometraje.");
-    const driverRecords = getDriverRecords(selectedDriver.id);
-    const lastKm = driverRecords[0]?.km_actual || 0;
-    const km_actual = parseFloat(newRecord.km_actual);
-    const km_recorrido = lastKm > 0 ? km_actual - lastKm : 0;
-    await addDoc(collection(db, "km_records"), {
-      ...newRecord,
-      driverId: selectedDriver.id,
-      driverNombre: selectedDriver.nombre,
-      km_actual,
-      km_recorrido: km_recorrido >= 0 ? km_recorrido : 0,
-      createdAt: new Date().toISOString(),
-    });
-    setNewRecord({ fecha: new Date().toISOString().split("T")[0], km_actual: "", notas: "" });
-    setShowRecordForm(false);
-  };
-
-  const deleteRecord = async (id) => {
-    if (window.confirm("¿Eliminar este registro?")) await deleteDoc(doc(db, "km_records", id));
-  };
-
-  const getDriverRecords = (driverId) =>
-    records.filter((r) => r.driverId === driverId).sort((a, b) => b.fecha.localeCompare(a.fecha));
-
-  const copyLink = (driverId) => {
-    const link = `${window.location.origin}?km=${driverId}`;
+  const copySupLink = (supId) => {
+    const link = window.location.origin + "?sup=" + supId;
     navigator.clipboard.writeText(link);
-    setCopiedDriver(driverId);
-    setTimeout(() => setCopiedDriver(null), 2000);
+    setCopiedSup(supId);
+    setTimeout(() => setCopiedSup(null), 2000);
   };
 
-  const driverRecords = selectedDriver ? getDriverRecords(selectedDriver.id) : [];
-  const totalKm = driverRecords.reduce((s, r) => s + (r.km_recorrido || 0), 0);
-  const lastRecord = driverRecords[0];
+  const getRecord = (patente, mes) =>
+    records.find((r) => r.patente === patente && r.mes === mes);
+
+  const getGrupoStats = (grupo) => {
+    const todos = [{ patente: grupo.supervisorPatente }, ...grupo.conductores];
+    const registrados = todos.filter((v) => getRecord(v.patente, selectedMes)).length;
+    return { total: todos.length, registrados };
+  };
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-      {/* Sidebar conductores */}
+      {/* Sidebar grupos */}
       <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
-        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>CONDUCTORES</div>
+        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>GRUPOS</div>
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {drivers.map((d) => {
-            const recs = getDriverRecords(d.id);
-            const last = recs[0];
-            const isActive = selectedDriver?.id === d.id;
+          {GRUPOS_KM.map((g) => {
+            const isActive = selectedGrupo?.supervisorId === g.supervisorId;
+            const stats = getGrupoStats(g);
+            const allDone = stats.registrados === stats.total;
             return (
-              <div key={d.id} onClick={() => setSelectedDriver(d)}
+              <div key={g.supervisorId} onClick={() => setSelectedGrupo(g)}
                 style={{ padding: "10px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: isActive ? TD.sidebarActive : "transparent", borderRadius: "0 4px 4px 0", marginRight: 8, transition: "background 0.1s" }}
                 onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
                 onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: TD.blue, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                  {d.nombre.charAt(0).toUpperCase()}
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: isActive ? TD.blue : "#DDD", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                  {g.supervisor.charAt(0)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.nombre}</div>
-                  <div style={{ fontSize: 11, color: TD.light }}>{d.patente || d.vehiculo || "Sin vehículo"}</div>
+                  <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.supervisor}</div>
+                  <div style={{ fontSize: 11, color: allDone ? "#107C10" : TD.light }}>{stats.registrados}/{stats.total} registrados</div>
                 </div>
-                {isActive && (
-                  <span onClick={(e) => { e.stopPropagation(); deleteDriver(d.id); }} style={{ color: TD.light, cursor: "pointer", fontSize: 14 }}>×</span>
-                )}
               </div>
             );
           })}
-        </div>
-        <div style={{ padding: "8px 12px", borderTop: "1px solid " + TD.border }}>
-          {showDriverForm ? (
-            <div>
-              <input autoFocus value={newDriver.nombre} onChange={(e) => setNewDriver({ ...newDriver, nombre: e.target.value })}
-                onKeyDown={(e) => { if (e.key === "Enter") addDriver(); if (e.key === "Escape") setShowDriverForm(false); }}
-                placeholder="Nombre del conductor *"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
-              <input value={newDriver.vehiculo} onChange={(e) => setNewDriver({ ...newDriver, vehiculo: e.target.value })}
-                placeholder="Vehículo (ej: Toyota Hilux)"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
-              <input value={newDriver.patente} onChange={(e) => setNewDriver({ ...newDriver, patente: e.target.value })}
-                placeholder="Patente"
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 6 }} />
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={addDriver} style={{ flex: 1, background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Crear</button>
-                <button onClick={() => setShowDriverForm(false)} style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "5px", fontSize: 11, cursor: "pointer" }}>Cancelar</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setShowDriverForm(true)}
-              style={{ width: "100%", background: "none", border: "none", color: TD.muted, borderRadius: 4, padding: "7px 4px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16, color: TD.blue }}>+</span> Nuevo conductor
-            </button>
-          )}
         </div>
       </div>
 
       {/* Panel central */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
-        {!selectedDriver ? (
+        {!selectedGrupo ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, flexDirection: "column", gap: 12 }}>
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#EDEBE9" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <div style={{ fontSize: 15, color: TD.muted }}>Selecciona un conductor para ver su historial</div>
-            <div style={{ fontSize: 13, color: TD.light, maxWidth: 380, textAlign: "center" }}>
-              Cada conductor tiene un link personalizado para registrar su kilometraje desde su celular
-            </div>
+            <div style={{ fontSize: 40 }}>🚗</div>
+            <div style={{ fontSize: 15, color: TD.muted }}>Selecciona un grupo para ver el registro</div>
           </div>
         ) : (
           <>
             <div style={{ padding: "20px 28px 0" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>{selectedDriver.nombre}</div>
-                <button onClick={() => copyLink(selectedDriver.id)}
-                  style={{ background: copiedDriver === selectedDriver.id ? "#107C10" : TD.blue, color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  {copiedDriver === selectedDriver.id ? "¡Copiado!" : "Copiar link del conductor"}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 26, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>{selectedGrupo.supervisor}</div>
+                <button onClick={() => copySupLink(selectedGrupo.supervisorId)}
+                  style={{ background: copiedSup === selectedGrupo.supervisorId ? "#107C10" : TD.blue, color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  🔗 {copiedSup === selectedGrupo.supervisorId ? "¡Link copiado!" : "Copiar link del grupo"}
                 </button>
               </div>
-              <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
-                {selectedDriver.vehiculo && <span style={{ fontSize: 12, color: TD.muted }}>🚗 {selectedDriver.vehiculo}</span>}
-                {selectedDriver.patente && <span style={{ fontSize: 12, color: TD.muted }}>🔖 {selectedDriver.patente}</span>}
-              </div>
+              <div style={{ fontSize: 13, color: TD.muted, marginBottom: 16 }}>Patente: {selectedGrupo.supervisorPatente} · {selectedGrupo.conductores.length + 1} vehículos</div>
 
-              {/* Stats */}
-              <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-                {[
-                  { label: "Registros", value: driverRecords.length, icon: "📋" },
-                  { label: "KM recorridos", value: totalKm.toLocaleString("es-CL") + " km", icon: "📍" },
-                  { label: "Último registro", value: lastRecord ? new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL") : "—", icon: "📅" },
-                  { label: "KM actual", value: lastRecord ? lastRecord.km_actual?.toLocaleString("es-CL") + " km" : "—", icon: "🔢" },
-                ].map((s) => (
-                  <div key={s.label} style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 8, padding: "12px 16px", flex: 1 }}>
-                    <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
-                    <div style={{ fontSize: 17, fontWeight: 700, color: TD.text }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: TD.light }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Formulario inline */}
-              <div style={{ background: TD.bg, border: "1px solid " + TD.border, borderRadius: 6, padding: "10px 14px", marginBottom: 16 }}>
-                {showRecordForm ? (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <input type="date" value={newRecord.fecha} onChange={(e) => setNewRecord({ ...newRecord, fecha: e.target.value })}
-                      style={{ padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
-                    <input type="number" placeholder="KM actual del vehículo" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
-                      style={{ width: 160, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
-                    <input placeholder="Notas (opcional)" value={newRecord.notas} onChange={(e) => setNewRecord({ ...newRecord, notas: e.target.value })}
-                      style={{ flex: 1, minWidth: 120, padding: "5px 8px", border: "1px solid " + TD.border, borderRadius: 4, fontSize: 13, fontFamily: "inherit" }} />
-                    <button onClick={addRecord} style={{ background: TD.blue, color: "white", border: "none", borderRadius: 4, padding: "5px 14px", fontSize: 13, cursor: "pointer" }}>Registrar</button>
-                    <button onClick={() => setShowRecordForm(false)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 14 }}>✕</button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setShowRecordForm(true)}>
-                    <span style={{ fontSize: 18, color: TD.blue }}>+</span>
-                    <span style={{ fontSize: 14, color: TD.muted }}>Registrar kilometraje</span>
-                  </div>
-                )}
+              {/* Selector mes */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <label style={{ fontSize: 13, color: TD.muted, fontWeight: 600 }}>Mes:</label>
+                <select value={selectedMes} onChange={(e) => setSelectedMes(e.target.value)}
+                  style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit" }}>
+                  {MESES_2026.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
               </div>
             </div>
 
-            {/* Historial */}
+            {/* Tabla de vehículos */}
             <div style={{ flex: 1, overflowY: "auto", padding: "0 28px 20px" }}>
-              {driverRecords.length === 0 ? (
-                <div style={{ color: TD.light, fontSize: 13, textAlign: "center", padding: "40px 0" }}>Sin registros aún</div>
-              ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "2px solid " + TD.border }}>
-                      {["Fecha", "KM actual", "KM recorridos", "Notas", ""].map((h) => (
-                        <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driverRecords.map((r, i) => (
-                      <tr key={r.id} style={{ borderBottom: "1px solid " + TD.border, background: i === 0 ? "#F0F7FF" : "transparent" }}>
-                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 600 : 400 }}>
-                          {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
-                          {i === 0 && <span style={{ marginLeft: 8, fontSize: 10, background: TD.blue, color: "white", borderRadius: 3, padding: "1px 6px" }}>Último</span>}
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: 600 }}>{r.km_actual?.toLocaleString("es-CL")} km</td>
-                        <td style={{ padding: "10px 12px", fontSize: 14, color: r.km_recorrido > 0 ? "#107C10" : TD.light, fontWeight: 500 }}>
-                          {r.km_recorrido > 0 ? `+${r.km_recorrido?.toLocaleString("es-CL")} km` : "—"}
-                        </td>
-                        <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{r.notas || "—"}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                          <button onClick={() => deleteRecord(r.id)} style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 14 }}>×</button>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid " + TD.border }}>
+                    {["Nombre", "Cargo", "Patente", "KM " + (MESES_2026.find((m) => m.value === selectedMes)?.label || "")].map((h) => (
+                      <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Supervisor */}
+                  {[{ nombre: selectedGrupo.supervisor, patente: selectedGrupo.supervisorPatente, cargo: "Supervisor" }, ...selectedGrupo.conductores.map((c) => ({ ...c, cargo: "Técnico" }))].map((v, i) => {
+                    const rec = getRecord(v.patente, selectedMes);
+                    return (
+                      <tr key={v.patente} style={{ borderBottom: "1px solid " + TD.border, background: i === 0 ? "#EEF3FB" : "transparent" }}>
+                        <td style={{ padding: "10px 12px", fontSize: 14, color: TD.text, fontWeight: i === 0 ? 700 : 400 }}>{v.nombre}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{v.cargo}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>{v.patente}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          {rec ? (
+                            <span style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{rec.km_actual?.toLocaleString("es-CL")} km</span>
+                          ) : (
+                            <span style={{ fontSize: 12, color: TD.light, fontStyle: "italic" }}>Pendiente</span>
+                          )}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -1329,6 +1435,7 @@ function KilometrajeModule() {
     </div>
   );
 }
+
 
 export default function App() {
   const [tasks, setTasks] = useState({});
@@ -1353,6 +1460,8 @@ export default function App() {
   if (cotizacionId) return <ContractorPage quoteId={cotizacionId} />;
   const kmDriverId = urlParams.get("km");
   if (kmDriverId) return <DriverPage driverId={kmDriverId} />;
+  const supId = urlParams.get("sup");
+  if (supId) return <SupervisorPage supId={supId} />;
 
   useEffect(() => {
     let taskUnsubs = [], catUnsubs = [];
