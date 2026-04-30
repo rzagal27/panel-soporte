@@ -6,7 +6,7 @@ import {
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
 import * as XLSX from "xlsx";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType } from "docx";
+// docx generation via HTML blob
 
 const EMAILJS_SERVICE = "service_uv11blm";
 const EMAILJS_TEMPLATE = "template_d1t0lp9";
@@ -1676,92 +1676,53 @@ INSTRUCCIONES:
 
   const generateWord = async () => {
     setGenerating(true);
-    // Get last assistant message as content
     const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
     if (!lastAssistant) { alert("Primero genera las EETT en el chat."); setGenerating(false); return; }
 
-    const content = lastAssistant.content.replace("DOCUMENTO_LISTO:", "").trim();
-    const lines = content.split("\n");
+    const rawContent = lastAssistant.content.replace("DOCUMENTO_LISTO:", "").trim();
 
-    const children = [];
+    // Convert markdown to HTML for Word-compatible RTF
+    const lines = rawContent.split("\n");
+    let htmlLines = lines.map((line) => {
+      const t = line.trim();
+      if (!t) return "<p>&nbsp;</p>";
+      if (t.startsWith("### ")) return "<h3>" + t.replace("### ", "") + "</h3>";
+      if (t.startsWith("## ")) return "<h2>" + t.replace("## ", "") + "</h2>";
+      if (t.startsWith("# ")) return "<h1>" + t.replace("# ", "") + "</h1>";
+      if (t.startsWith("- ") || t.startsWith("* ")) return "<li>" + t.replace(/^[-*] /, "") + "</li>";
+      // Bold **text**
+      const processed = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+      return "<p>" + processed + "</p>";
+    }).join("\n");
 
-    // Title
-    children.push(new Paragraph({
-      text: "ESPECIFICACIONES TÉCNICAS",
-      heading: HeadingLevel.HEADING_1,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-    }));
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8">
+      <style>
+        body { font-family: Calibri, sans-serif; font-size: 11pt; margin: 2cm; }
+        h1 { font-size: 18pt; color: #1F3864; font-weight: bold; margin-top: 20pt; }
+        h2 { font-size: 14pt; color: #2564CF; font-weight: bold; margin-top: 14pt; }
+        h3 { font-size: 12pt; color: #444444; font-weight: bold; margin-top: 10pt; }
+        p { margin: 4pt 0; line-height: 1.4; }
+        li { margin: 3pt 0 3pt 20pt; }
+        b { font-weight: bold; }
+        .title { text-align: center; font-size: 20pt; color: #1F3864; font-weight: bold; margin-bottom: 6pt; }
+        .date { text-align: center; color: #666; margin-bottom: 24pt; }
+      </style>
+      </head>
+      <body>
+        <div class="title">ESPECIFICACIONES TÉCNICAS</div>
+        <div class="date">${new Date().toLocaleDateString("es-CL")}</div>
+        ${htmlLines}
+      </body></html>`;
 
-    children.push(new Paragraph({
-      text: new Date().toLocaleDateString("es-CL"),
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 600 },
-    }));
-
-    lines.forEach((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        children.push(new Paragraph({ text: "", spacing: { after: 100 } }));
-      } else if (trimmed.startsWith("# ")) {
-        children.push(new Paragraph({
-          text: trimmed.replace("# ", ""),
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        }));
-      } else if (trimmed.startsWith("## ")) {
-        children.push(new Paragraph({
-          text: trimmed.replace("## ", ""),
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 300, after: 150 },
-        }));
-      } else if (trimmed.startsWith("### ")) {
-        children.push(new Paragraph({
-          text: trimmed.replace("### ", ""),
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-        }));
-      } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-        children.push(new Paragraph({
-          text: trimmed.replace(/^[-*] /, ""),
-          bullet: { level: 0 },
-          spacing: { after: 80 },
-        }));
-      } else if (/^\d+\./.test(trimmed)) {
-        children.push(new Paragraph({
-          text: trimmed,
-          numbering: { reference: "default-numbering", level: 0 },
-          spacing: { after: 80 },
-        }));
-      } else if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: trimmed.replace(/\*\*/g, ""), bold: true })],
-          spacing: { after: 100 },
-        }));
-      } else {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: trimmed })],
-          spacing: { after: 100 },
-        }));
-      }
-    });
-
-    const doc = new Document({
-      sections: [{ properties: {}, children }],
-      styles: {
-        paragraphStyles: [
-          { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", run: { size: 28, bold: true, color: "1F3864" }, paragraph: { spacing: { before: 400, after: 200 } } },
-          { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", run: { size: 24, bold: true, color: "2564CF" }, paragraph: { spacing: { before: 300, after: 150 } } },
-          { id: "Heading3", name: "Heading 3", basedOn: "Normal", next: "Normal", run: { size: 22, bold: true, color: "444444" }, paragraph: { spacing: { before: 200, after: 100 } } },
-        ],
-      },
-    });
-
-    const blob = await Packer.toBlob(doc);
+    const blob = new Blob([html], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "EETT_Proyecto_" + new Date().toLocaleDateString("es-CL").replace(/\//g, "-") + ".docx";
+    a.download = "EETT_Proyecto_" + new Date().toLocaleDateString("es-CL").replace(/\//g, "-") + ".doc";
     a.click();
     URL.revokeObjectURL(url);
     setGenerating(false);
