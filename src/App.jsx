@@ -930,25 +930,25 @@ function GasModule() {
 
 // Input de KM sin pérdida de foco al borrar
 function KmInput({ patente, initialValue, onCommit }) {
-  const [localVal, setLocalVal] = useState(initialValue || "");
-  
-  useEffect(() => {
-    setLocalVal(initialValue || "");
-  }, [initialValue]);
+  const inputRef = useRef(null);
+
+  const handleChange = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, "");
+    // Update input value directly via ref to avoid re-render focus loss
+    if (inputRef.current) inputRef.current.value = val;
+    onCommit(patente, val);
+  };
 
   return (
     <input
+      ref={inputRef}
       type="text"
       inputMode="numeric"
       pattern="[0-9]*"
       placeholder="Ej: 125430"
-      value={localVal}
-      onChange={(e) => {
-        const val = e.target.value.replace(/[^0-9]/g, "");
-        setLocalVal(val);
-        onCommit(patente, val);
-      }}
-      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid " + (localVal ? "#2564CF" : "#EDEBE9"), fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+      defaultValue={initialValue || ""}
+      onChange={handleChange}
+      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid #2564CF", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
     />
   );
 }
