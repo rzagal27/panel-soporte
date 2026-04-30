@@ -5,6 +5,7 @@ import {
   doc, updateDoc, deleteDoc, setDoc
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
+import * as XLSX from "xlsx";
 
 const EMAILJS_SERVICE = "service_uv11blm";
 const EMAILJS_TEMPLATE = "template_d1t0lp9";
@@ -1336,6 +1337,51 @@ function KilometrajeModule() {
     return () => unsub();
   }, []);
 
+  const exportarExcel = () => {
+    // Build cargo map
+    const getCargoInicial = (supervisorId, esConductor) => {
+      if (esConductor) return "Tec";
+      if (supervisorId === "gr_atoledo") return "RFM";
+      if (supervisorId.startsWith("gp_")) return "GP";
+      return "GM";
+    };
+
+    // Build all vehicles list
+    const filas = [];
+    GRUPOS_KM.forEach((g) => {
+      const cargoSup = getCargoInicial(g.supervisorId, false);
+      // Supervisor/Gerente row
+      const filaSup = { Nombre: g.supervisor, Patente: g.supervisorPatente, Cargo: cargoSup };
+      MESES_2026.forEach((m) => {
+        const rec = records.find((r) => r.patente === g.supervisorPatente && r.mes === m.value);
+        filaSup[m.label] = rec ? rec.km_actual : "";
+      });
+      filas.push(filaSup);
+      // Conductores
+      g.conductores.forEach((c) => {
+        const fila = { Nombre: c.nombre, Patente: c.patente, Cargo: "Tec" };
+        MESES_2026.forEach((m) => {
+          const rec = records.find((r) => r.patente === c.patente && r.mes === m.value);
+          fila[m.label] = rec ? rec.km_actual : "";
+        });
+        filas.push(fila);
+      });
+    });
+
+    // Create workbook
+    const ws = XLSX.utils.json_to_sheet(filas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Kilometraje 2026");
+
+    // Style column widths
+    ws["!cols"] = [
+      { wch: 22 }, { wch: 10 }, { wch: 6 },
+      ...MESES_2026.map(() => ({ wch: 14 }))
+    ];
+
+    XLSX.writeFile(wb, "Kilometraje_2026.xlsx");
+  };
+
   const copySupLink = (supId) => {
     const link = window.location.origin + "?sup=" + supId;
     navigator.clipboard.writeText(link);
@@ -1356,7 +1402,13 @@ function KilometrajeModule() {
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       {/* Sidebar grupos */}
       <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
-        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>EQUIPOS</div>
+        <div style={{ padding: "12px 16px 4px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>EQUIPOS</div>
+          <button onClick={exportarExcel}
+            style={{ background: "#107C10", color: "white", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", fontWeight: 700 }}>
+            📊 Excel
+          </button>
+        </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {GRUPOS_KM.filter((g) => !g.tipo).map((g) => {
             const isActive = selectedGrupo?.supervisorId === g.supervisorId;
