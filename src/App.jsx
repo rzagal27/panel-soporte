@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, addDoc, onSnapshot,
@@ -930,9 +930,9 @@ function GasModule() {
 
 // Input de KM sin pérdida de foco al borrar
 function KmInput({ patente, initialValue, onCommit }) {
-  const [localVal, setLocalVal] = React.useState(initialValue || "");
+  const [localVal, setLocalVal] = useState(initialValue || "");
   
-  React.useEffect(() => {
+  useEffect(() => {
     setLocalVal(initialValue || "");
   }, [initialValue]);
 
@@ -1589,7 +1589,7 @@ function EETTModule() {
   const [newEett, setNewEett] = useState({ titulo: "", categoria: "", contenido: "" });
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const messagesEndRef = React.useRef(null);
+  const messagesEndRef = useRef(null);
 
   const TD = {
     blue: "#2564CF", sidebar: "#F3F2F1", sidebarHover: "#EAEAEA",
