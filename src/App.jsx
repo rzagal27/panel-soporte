@@ -1288,8 +1288,20 @@ const GRUPOS_KM = [
       { nombre: "Juan Francisco Perez", patente: "TSTT96" },
       { nombre: "Cervando Carillo", patente: "TSTS66" },
       { nombre: "Patricio Leon", patente: "TSTS49" },
+      { nombre: "Hipolito Ahumada", patente: "TSTT30" },
     ]
   },
+  // Gerentes de Propiedades (individuales)
+  { supervisor: "Juan Palma", supervisorPatente: "TRCX81", supervisorId: "gp_jpalma", conductores: [], tipo: "individual" },
+  { supervisor: "José Reyes", supervisorPatente: "TRCX92", supervisorId: "gp_jreyes", conductores: [], tipo: "individual" },
+  { supervisor: "Patricio Toloza", supervisorPatente: "TTHS55", supervisorId: "gp_ptoloza", conductores: [], tipo: "individual" },
+  { supervisor: "Edgar Solis", supervisorPatente: "TRCX90", supervisorId: "gp_esolis", conductores: [], tipo: "individual" },
+  { supervisor: "Alan Miranda", supervisorPatente: "TRCX94", supervisorId: "gp_amiranda", conductores: [], tipo: "individual" },
+  { supervisor: "Juan Nahuel", supervisorPatente: "VHBP35", supervisorId: "gp_jnahuel", conductores: [], tipo: "individual" },
+  { supervisor: "Ricardo Orellana", supervisorPatente: "SJCC22", supervisorId: "gp_rorellana", conductores: [], tipo: "individual" },
+  { supervisor: "Esteban Dote", supervisorPatente: "SJCC21", supervisorId: "gp_edote", conductores: [], tipo: "individual" },
+  // Gerente Regional
+  { supervisor: "Andrés Toledo", supervisorPatente: "TRCX79", supervisorId: "gr_atoledo", conductores: [], tipo: "individual" },
 ];
 
 const MESES_2026 = [
@@ -1344,9 +1356,9 @@ function KilometrajeModule() {
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       {/* Sidebar grupos */}
       <div style={{ width: 240, background: TD.sidebar, display: "flex", flexDirection: "column", flexShrink: 0, borderRight: "1px solid " + TD.border }}>
-        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>GRUPOS</div>
+        <div style={{ padding: "16px 16px 8px", fontSize: 13, fontWeight: 700, color: TD.muted, letterSpacing: 0.5 }}>EQUIPOS</div>
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {GRUPOS_KM.map((g) => {
+          {GRUPOS_KM.filter((g) => !g.tipo).map((g) => {
             const isActive = selectedGrupo?.supervisorId === g.supervisorId;
             const stats = getGrupoStats(g);
             const allDone = stats.registrados === stats.total;
@@ -1362,6 +1374,23 @@ function KilometrajeModule() {
                   <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.supervisor}</div>
                   <div style={{ fontSize: 11, color: allDone ? "#107C10" : TD.light }}>{stats.registrados}/{stats.total} registrados</div>
                 </div>
+              </div>
+            );
+          })}
+          <div style={{ padding: "12px 16px 4px", fontSize: 11, fontWeight: 700, color: TD.light, letterSpacing: 0.5, marginTop: 8 }}>GERENTES INDIVIDUALES</div>
+          {GRUPOS_KM.filter((g) => g.tipo === "individual").map((g) => {
+            const isActive = selectedGrupo?.supervisorId === g.supervisorId;
+            const rec = records.find((r) => r.patente === g.supervisorPatente && r.mes === selectedMes);
+            return (
+              <div key={g.supervisorId} onClick={() => setSelectedGrupo(g)}
+                style={{ padding: "8px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, background: isActive ? TD.sidebarActive : "transparent", borderRadius: "0 4px 4px 0", marginRight: 8, transition: "background 0.1s" }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = TD.sidebarHover; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 400, color: isActive ? TD.blue : TD.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.supervisor}</div>
+                  <div style={{ fontSize: 10, color: TD.light }}>{g.supervisorPatente}</div>
+                </div>
+                {rec && <span style={{ fontSize: 10, color: "#107C10", fontWeight: 700 }}>✓</span>}
               </div>
             );
           })}
