@@ -1040,7 +1040,7 @@ function SupervisorPage({ supId }) {
                 <div>
                   {existing && !kmInputs[v.patente] ? (
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{existing.km_actual?.toLocaleString("es-CL")} km</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{existing.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</div>
                       <div style={{ fontSize: 10, color: "#A19F9D" }}>
                         Registrado
                         <button onClick={() => handleKmChange(v.patente, existing.km_actual.toString())}
@@ -1156,8 +1156,8 @@ function DriverPage({ driverId }) {
         {lastRecord && (
           <div style={{ background: "#2564CF", borderRadius: 10, padding: "16px 20px", marginBottom: 16, color: "white" }}>
             <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 4 }}>Último registro — {new Date(lastRecord.fecha + "T12:00:00").toLocaleDateString("es-CL")}</div>
-            <div style={{ fontSize: 32, fontWeight: 700 }}>{lastRecord.km_actual?.toLocaleString("es-CL")} km</div>
-            {lastRecord.km_recorrido > 0 && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>+{lastRecord.km_recorrido?.toLocaleString("es-CL")} km desde el registro anterior</div>}
+            <div style={{ fontSize: 32, fontWeight: 700 }}>{lastRecord.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</div>
+            {lastRecord.km_recorrido > 0 && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>+{lastRecord.km_recorrido?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km desde el registro anterior</div>}
           </div>
         )}
 
@@ -1189,7 +1189,7 @@ function DriverPage({ driverId }) {
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
                 {lastRecord && newRecord.km_actual && (
                   <div style={{ fontSize: 11, color: "#2564CF", marginTop: 4 }}>
-                    Km recorridos desde último registro: {Math.max(0, parseFloat(newRecord.km_actual) - lastRecord.km_actual).toLocaleString("es-CL")} km
+                    Km recorridos desde último registro: {Math.max(0, parseFloat(newRecord.km_actual) - lastRecord.km_actual).toLocaleString("es-CL", {maximumFractionDigits: 0})} km
                   </div>
                 )}
               </div>
@@ -1222,10 +1222,10 @@ function DriverPage({ driverId }) {
                   {i === 0 ? "★" : i + 1}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1F1F1F" }}>{r.km_actual?.toLocaleString("es-CL")} km</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1F1F1F" }}>{r.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</div>
                   <div style={{ fontSize: 11, color: "#A19F9D" }}>
                     {new Date(r.fecha + "T12:00:00").toLocaleDateString("es-CL")}
-                    {r.km_recorrido > 0 && <span style={{ color: "#107C10", marginLeft: 8 }}>+{r.km_recorrido?.toLocaleString("es-CL")} km</span>}
+                    {r.km_recorrido > 0 && <span style={{ color: "#107C10", marginLeft: 8 }}>+{r.km_recorrido?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</span>}
                   </div>
                   {r.notas && <div style={{ fontSize: 11, color: "#605E5C", marginTop: 2 }}>{r.notas}</div>}
                 </div>
@@ -1499,7 +1499,7 @@ function KilometrajeModule() {
                         <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>{v.patente}</td>
                         <td style={{ padding: "10px 12px" }}>
                           {rec ? (
-                            <span style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{rec.km_actual?.toLocaleString("es-CL")} km</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: "#107C10" }}>{rec.km_actual?.toLocaleString("es-CL", {maximumFractionDigits: 0})} km</span>
                           ) : (
                             <span style={{ fontSize: 12, color: TD.light, fontStyle: "italic" }}>Pendiente</span>
                           )}
