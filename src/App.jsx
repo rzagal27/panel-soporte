@@ -1338,7 +1338,6 @@ function KilometrajeModule() {
   }, []);
 
   const exportarExcel = () => {
-    // Build cargo map
     const getCargoInicial = (supervisorId, esConductor) => {
       if (esConductor) return "Tec";
       if (supervisorId === "gr_atoledo") return "RFM";
@@ -1346,21 +1345,25 @@ function KilometrajeModule() {
       return "GM";
     };
 
+    // Nombres de meses sin año
+    const MESES_CORTOS = MESES_2026.map((m) => ({
+      value: m.value,
+      label: m.label.replace(" 2026", ""),
+    }));
+
     // Build all vehicles list
     const filas = [];
     GRUPOS_KM.forEach((g) => {
       const cargoSup = getCargoInicial(g.supervisorId, false);
-      // Supervisor/Gerente row
       const filaSup = { Nombre: g.supervisor, Patente: g.supervisorPatente, Cargo: cargoSup };
-      MESES_2026.forEach((m) => {
+      MESES_CORTOS.forEach((m) => {
         const rec = records.find((r) => r.patente === g.supervisorPatente && r.mes === m.value);
         filaSup[m.label] = rec ? rec.km_actual : "";
       });
       filas.push(filaSup);
-      // Conductores
       g.conductores.forEach((c) => {
         const fila = { Nombre: c.nombre, Patente: c.patente, Cargo: "Tec" };
-        MESES_2026.forEach((m) => {
+        MESES_CORTOS.forEach((m) => {
           const rec = records.find((r) => r.patente === c.patente && r.mes === m.value);
           fila[m.label] = rec ? rec.km_actual : "";
         });
@@ -1368,17 +1371,49 @@ function KilometrajeModule() {
       });
     });
 
-    // Create workbook
-    const ws = XLSX.utils.json_to_sheet(filas);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Kilometraje 2026");
+    const ws = XLSX.utils.json_to_sheet(filas);
 
-    // Style column widths
+    // Column widths
     ws["!cols"] = [
-      { wch: 22 }, { wch: 10 }, { wch: 6 },
-      ...MESES_2026.map(() => ({ wch: 14 }))
+      { wch: 24 }, { wch: 10 }, { wch: 6 },
+      ...MESES_CORTOS.map(() => ({ wch: 12 }))
     ];
 
+    // Apply borders and bold headers
+    const totalCols = 3 + MESES_CORTOS.length;
+    const totalRows = filas.length + 1; // +1 for header row
+
+    const borderStyle = {
+      top: { style: "thin", color: { rgb: "000000" } },
+      bottom: { style: "thin", color: { rgb: "000000" } },
+      left: { style: "thin", color: { rgb: "000000" } },
+      right: { style: "thin", color: { rgb: "000000" } },
+    };
+
+    const headerFill = { fgColor: { rgb: "1F3864" }, patternType: "solid" };
+
+    for (let R = 0; R < totalRows; R++) {
+      for (let C = 0; C < totalCols; C++) {
+        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[cellRef]) ws[cellRef] = { v: "", t: "s" };
+        const isHeader = R === 0;
+        ws[cellRef].s = {
+          border: borderStyle,
+          font: {
+            bold: isHeader || C < 3,
+            color: { rgb: isHeader ? "FFFFFF" : "000000" },
+            sz: isHeader ? 11 : 10,
+          },
+          fill: isHeader ? headerFill : { fgColor: { rgb: C < 3 ? "F3F2F1" : "FFFFFF" }, patternType: "solid" },
+          alignment: { horizontal: C >= 3 ? "center" : "left", vertical: "center" },
+        };
+      }
+    }
+
+    ws["!rows"] = [{ hpt: 20 }]; // header row height
+
+    XLSX.utils.book_append_sheet(wb, ws, "Kilometraje 2026");
     XLSX.writeFile(wb, "Kilometraje_2026.xlsx");
   };
 
