@@ -12,7 +12,8 @@
     "@emailjs/browser": "^4.3.3",
     "firebase": "^10.7.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
