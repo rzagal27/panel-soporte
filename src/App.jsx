@@ -1050,9 +1050,9 @@ function SupervisorPage({ supId }) {
                       </div>
                     </div>
                   ) : (
-                    <input type="number" placeholder="Ej: 125430"
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Ej: 125430"
                       value={kmInputs[v.patente] || ""}
-                      onChange={(e) => handleKmChange(v.patente, e.target.value)}
+                      onChange={(e) => { const val = e.target.value.replace(/[^0-9]/g, ""); handleKmChange(v.patente, val); }}
                       style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid " + (kmInputs[v.patente] ? "#2564CF" : "#EDEBE9"), fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
                   )}
                 </div>
@@ -1185,7 +1185,7 @@ function DriverPage({ driverId }) {
               </div>
               <div>
                 <label style={{ fontSize: 12, color: "#605E5C", display: "block", marginBottom: 4 }}>Kilometraje actual del vehículo *</label>
-                <input type="number" placeholder="Ej: 125430" value={newRecord.km_actual} onChange={(e) => setNewRecord({ ...newRecord, km_actual: e.target.value })}
+                <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Ej: 125430" value={newRecord.km_actual} onChange={(e) => { const val = e.target.value.replace(/[^0-9]/g, ""); setNewRecord({ ...newRecord, km_actual: val }); }}
                   style={{ width: "100%", padding: "10px 12px", borderRadius: 6, border: "1px solid #EDEBE9", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box" }} />
                 {lastRecord && newRecord.km_actual && (
                   <div style={{ fontSize: 11, color: "#2564CF", marginTop: 4 }}>
