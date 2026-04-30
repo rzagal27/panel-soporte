@@ -926,6 +926,32 @@ function GasModule() {
 
 
 // ── PÁGINA PÚBLICA DEL SUPERVISOR ────────────────────────────────────────────
+
+// Input de KM sin pérdida de foco al borrar
+function KmInput({ patente, initialValue, onCommit }) {
+  const [localVal, setLocalVal] = React.useState(initialValue || "");
+  
+  React.useEffect(() => {
+    setLocalVal(initialValue || "");
+  }, [initialValue]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      placeholder="Ej: 125430"
+      value={localVal}
+      onChange={(e) => {
+        const val = e.target.value.replace(/[^0-9]/g, "");
+        setLocalVal(val);
+        onCommit(patente, val);
+      }}
+      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid " + (localVal ? "#2564CF" : "#EDEBE9"), fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+    />
+  );
+}
+
 function SupervisorPage({ supId }) {
   const grupo = GRUPOS_KM.find((g) => g.supervisorId === supId);
   const [records, setRecords] = useState([]);
@@ -1050,10 +1076,7 @@ function SupervisorPage({ supId }) {
                       </div>
                     </div>
                   ) : (
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Ej: 125430"
-                      value={kmInputs[v.patente] || ""}
-                      onChange={(e) => { const val = e.target.value.replace(/[^0-9]/g, ""); handleKmChange(v.patente, val); }}
-                      style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid " + (kmInputs[v.patente] ? "#2564CF" : "#EDEBE9"), fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                    <KmInput patente={v.patente} initialValue={kmInputs[v.patente]} onCommit={handleKmChange} />
                   )}
                 </div>
               </div>
