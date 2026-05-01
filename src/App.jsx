@@ -1716,7 +1716,7 @@ INSTRUCCIONES:
 6. Si el usuario pide generar el documento final, responde con "DOCUMENTO_LISTO:" seguido del contenido completo formateado
 7. Responde siempre en español`;
 
-      const GEMINI_KEY = "AIzaSyCITH2U_DvAed0bEUX9gntyQyt7GFibaoA";
+      const GEMINI_KEY = "AIzaSyD2tzBGa7ujaxzYbouWaGOZHwASFI6k1Ao";
       const geminiMessages = newMessages.map((m) => ({
         role: m.role === "assistant" ? "model" : "user",
         parts: [{ text: m.content }],
