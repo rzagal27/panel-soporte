@@ -1716,28 +1716,28 @@ INSTRUCCIONES:
 6. Si el usuario pide generar el documento final, responde con "DOCUMENTO_LISTO:" seguido del contenido completo formateado
 7. Responde siempre en español`;
 
-      const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
-      const geminiMessages = newMessages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      }));
+      const groqMessages = [
+        { role: "system", content: systemPrompt },
+        ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+      ];
 
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + GEMINI_KEY,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: geminiMessages,
-            generationConfig: { maxOutputTokens: 4000, temperature: 0.7 },
-          }),
-        }
-      );
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + import.meta.env.VITE_GROQ_KEY,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: groqMessages,
+          max_tokens: 4000,
+          temperature: 0.7,
+        }),
+      });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || "Gemini error");
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!response.ok) throw new Error(data.error?.message || "Groq error");
+      const text = data.choices?.[0]?.message?.content || "";
       const assistantMsg = { role: "assistant", content: text };
       setMessages([...newMessages, assistantMsg]);
     } catch (e) {
