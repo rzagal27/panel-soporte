@@ -1697,9 +1697,20 @@ function EETTModule() {
 
     try {
       // Build context from all EETTs
-      const eettContext = eetts.length > 0
-        ? "ESPECIFICACIONES TÉCNICAS BASE DISPONIBLES:\n\n" + eetts.map((e) => `[${e.categoria || "General"}] ${e.titulo}:\n${e.contenido}`).join("\n\n---\n\n")
-        : "No hay EETT base cargadas aún.";
+      // Limit EETT context to avoid token limits
+      const maxChars = 3000;
+      let eettContext = "No hay EETT base cargadas aún.";
+      if (eetts.length > 0) {
+        let ctx = "EETT BASE DISPONIBLES:\n\n";
+        let chars = 0;
+        for (const e of eetts) {
+          const snippet = "[" + (e.categoria || "General") + "] " + e.titulo + ":\n" + (e.contenido || "").substring(0, 800);
+          if (chars + snippet.length > maxChars) break;
+          ctx += snippet + "\n\n---\n\n";
+          chars += snippet.length;
+        }
+        eettContext = ctx;
+      }
 
       const systemPrompt = `Eres un asistente experto en especificaciones técnicas para proyectos de construcción y mantención de edificios en Chile.
 
@@ -1728,7 +1739,7 @@ INSTRUCCIONES:
           "Authorization": "Bearer " + import.meta.env.VITE_GROQ_KEY,
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "llama3-8b-8192",
           messages: groqMessages,
           max_tokens: 4000,
           temperature: 0.7,
