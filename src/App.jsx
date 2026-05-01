@@ -1617,44 +1617,54 @@ function EETTModule() {
   const extractTextFromFile = async (file) => {
     setExtracting(true);
     try {
-      if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-        // Extract PDF text using Anthropic API vision
+      const toBase64 = (f) => new Promise((resolve, reject) => {
         const reader = new FileReader();
-        return new Promise((resolve, reject) => {
-          reader.onload = async (e) => {
-            try {
-              const base64 = e.target.result.split(",")[1];
-              const response = await fetch("https://api.anthropic.com/v1/messages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  model: "claude-sonnet-4-20250514",
-                  max_tokens: 4000,
-                  messages: [{
-                    role: "user",
-                    content: [
-                      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-                      { type: "text", text: "Extrae todo el texto de este documento manteniendo la estructura. Devuelve solo el texto extraído sin comentarios adicionales." }
-                    ]
-                  }]
-                }),
-              });
-              const data = await response.json();
-              resolve(data.content[0].text);
-            } catch (err) { reject(err); }
-          };
-          reader.readAsDataURL(file);
-        });
-      } else if (file.name.endsWith(".docx")) {
-        // Extract Word text using mammoth via CDN
-        const mammoth = await import("https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js");
-        const arrayBuffer = await file.arrayBuffer();
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        return result.value;
-      } else {
-        // Plain text file
+        reader.onload = (e) => resolve(e.target.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
+
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const isDocx = file.name.toLowerCase().endsWith(".docx");
+      const isDoc = file.name.toLowerCase().endsWith(".doc");
+      const isTxt = file.name.toLowerCase().endsWith(".txt");
+
+      if (isTxt) {
         return await file.text();
       }
+
+      // For PDF and Word: send to Claude as document
+      const base64 = await toBase64(file);
+      let mediaType = "application/pdf";
+      if (isDocx || isDoc) mediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "document",
+                source: { type: "base64", media_type: "application/pdf", data: base64 }
+              },
+              {
+                type: "text",
+                text: "Extrae TODO el texto de este documento de especificaciones técnicas, manteniendo la estructura con títulos, secciones y subsecciones. Devuelve solo el texto extraído, sin comentarios ni explicaciones adicionales."
+              }
+            ]
+          }]
+        }),
+      });
+
+      if (!response.ok) throw new Error("Error API: " + response.status);
+      const data = await response.json();
+      if (data.content && data.content[0]) return data.content[0].text;
+      throw new Error("Sin contenido en respuesta");
+
     } finally {
       setExtracting(false);
     }
