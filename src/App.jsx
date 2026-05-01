@@ -1739,7 +1739,7 @@ INSTRUCCIONES:
           "Authorization": "Bearer " + import.meta.env.VITE_GROQ_KEY,
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192",
+          model: "llama-3.1-8b-instant",
           messages: groqMessages,
           max_tokens: 4000,
           temperature: 0.7,
