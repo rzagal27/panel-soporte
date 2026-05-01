@@ -1611,6 +1611,69 @@ function EETTModule() {
     if (messagesEndRef.current) messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const [extracting, setExtracting] = useState(false);
+  const [fileMode, setFileMode] = useState("texto"); // "texto" | "archivo"
+
+  const extractTextFromFile = async (file) => {
+    setExtracting(true);
+    try {
+      if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        // Extract PDF text using Anthropic API vision
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+          reader.onload = async (e) => {
+            try {
+              const base64 = e.target.result.split(",")[1];
+              const response = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  model: "claude-sonnet-4-20250514",
+                  max_tokens: 4000,
+                  messages: [{
+                    role: "user",
+                    content: [
+                      { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+                      { type: "text", text: "Extrae todo el texto de este documento manteniendo la estructura. Devuelve solo el texto extraído sin comentarios adicionales." }
+                    ]
+                  }]
+                }),
+              });
+              const data = await response.json();
+              resolve(data.content[0].text);
+            } catch (err) { reject(err); }
+          };
+          reader.readAsDataURL(file);
+        });
+      } else if (file.name.endsWith(".docx")) {
+        // Extract Word text using mammoth via CDN
+        const mammoth = await import("https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js");
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
+      } else {
+        // Plain text file
+        return await file.text();
+      }
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const filename = file.name.replace(/\.[^.]+$/, "");
+    setNewEett((prev) => ({ ...prev, titulo: prev.titulo || filename }));
+    try {
+      const text = await extractTextFromFile(file);
+      setNewEett((prev) => ({ ...prev, contenido: text }));
+    } catch (err) {
+      alert("Error al extraer el texto. Intenta pegar el contenido manualmente.");
+      console.error(err);
+    }
+  };
+
   const saveEett = async () => {
     if (!newEett.titulo.trim() || !newEett.contenido.trim()) return alert("Ingresa título y contenido.");
     setUploading(true);
@@ -1777,12 +1840,40 @@ INSTRUCCIONES:
                   <option value="">Categoría...</option>
                   {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
                 </select>
-                <textarea placeholder="Pega aquí el contenido de la EETT *" value={newEett.contenido} onChange={(e) => setNewEett({ ...newEett, contenido: e.target.value })}
-                  rows={6} style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical", marginBottom: 6 }} />
+
+                {/* Tabs: archivo o texto */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                  {["archivo", "texto"].map((mode) => (
+                    <button key={mode} onClick={() => setFileMode(mode)}
+                      style={{ flex: 1, padding: "5px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 10, fontFamily: "inherit", background: fileMode === mode ? TD.blue : TD.sidebarHover, color: fileMode === mode ? "white" : TD.muted }}>
+                      {mode === "archivo" ? "📎 Subir PDF/Word" : "✏️ Pegar texto"}
+                    </button>
+                  ))}
+                </div>
+
+                {fileMode === "archivo" ? (
+                  <div style={{ marginBottom: 6 }}>
+                    <input type="file" accept=".pdf,.docx,.txt"
+                      onChange={handleFileUpload}
+                      style={{ width: "100%", fontSize: 11, fontFamily: "inherit" }} />
+                    {extracting && (
+                      <div style={{ fontSize: 11, color: TD.blue, marginTop: 4 }}>⏳ Extrayendo texto del archivo...</div>
+                    )}
+                    {newEett.contenido && !extracting && (
+                      <div style={{ fontSize: 10, color: "#107C10", marginTop: 4 }}>
+                        ✓ Texto extraído ({newEett.contenido.length} caracteres)
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <textarea placeholder="Pega aquí el contenido de la EETT *" value={newEett.contenido} onChange={(e) => setNewEett({ ...newEett, contenido: e.target.value })}
+                    rows={6} style={{ width: "100%", padding: "6px 8px", borderRadius: 4, border: "1px solid " + TD.border, fontSize: 11, fontFamily: "inherit", boxSizing: "border-box", resize: "vertical", marginBottom: 6 }} />
+                )}
+
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={saveEett} disabled={uploading}
+                  <button onClick={saveEett} disabled={uploading || extracting}
                     style={{ flex: 1, background: "#107C10", color: "white", border: "none", borderRadius: 4, padding: "6px", fontSize: 11, cursor: "pointer" }}>
-                    {uploading ? "Guardando..." : "Guardar"}
+                    {uploading ? "Guardando..." : extracting ? "Extrayendo..." : "Guardar"}
                   </button>
                   <button onClick={() => setShowUpload(false)}
                     style={{ flex: 1, background: TD.sidebarHover, color: TD.muted, border: "none", borderRadius: 4, padding: "6px", fontSize: 11, cursor: "pointer" }}>
