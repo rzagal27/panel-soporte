@@ -1638,32 +1638,19 @@ function EETTModule() {
       let mediaType = "application/pdf";
       if (isDocx || isDoc) mediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-      const response = await fetch("/api/chat", {
+      // Use Gemini Files API for PDF/Word extraction
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const uploadRes = await fetch("/api/extract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          messages: [{
-            role: "user",
-            content: [
-              {
-                type: "document",
-                source: { type: "base64", media_type: "application/pdf", data: base64 }
-              },
-              {
-                type: "text",
-                text: "Extrae TODO el texto de este documento de especificaciones técnicas, manteniendo la estructura con títulos, secciones y subsecciones. Devuelve solo el texto extraído, sin comentarios ni explicaciones adicionales."
-              }
-            ]
-          }]
-        }),
+        body: formData,
       });
 
-      if (!response.ok) throw new Error("Error API: " + response.status);
-      const data = await response.json();
-      if (data.content && data.content[0]) return data.content[0].text;
-      throw new Error("Sin contenido en respuesta");
+      if (!uploadRes.ok) throw new Error("Error al procesar archivo");
+      const extractData = await uploadRes.json();
+      if (extractData.text) return extractData.text;
+      throw new Error("Sin contenido extraído");
 
     } finally {
       setExtracting(false);
@@ -1729,19 +1716,29 @@ INSTRUCCIONES:
 6. Si el usuario pide generar el documento final, responde con "DOCUMENTO_LISTO:" seguido del contenido completo formateado
 7. Responde siempre en español`;
 
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          system: systemPrompt,
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      });
+      const GEMINI_KEY = "AIzaSyCITH2U_DvAed0bEUX9gntyQyt7GFibaoA";
+      const geminiMessages = newMessages.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      const response = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + GEMINI_KEY,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: geminiMessages,
+            generationConfig: { maxOutputTokens: 4000, temperature: 0.7 },
+          }),
+        }
+      );
 
       const data = await response.json();
-      const assistantMsg = { role: "assistant", content: data.content[0].text };
+      if (!response.ok) throw new Error(data.error?.message || "Gemini error");
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const assistantMsg = { role: "assistant", content: text };
       setMessages([...newMessages, assistantMsg]);
     } catch (e) {
       console.error(e);
