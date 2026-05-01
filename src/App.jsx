@@ -1638,7 +1638,7 @@ function EETTModule() {
       let mediaType = "application/pdf";
       if (isDocx || isDoc) mediaType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1729,7 +1729,7 @@ INSTRUCCIONES:
 6. Si el usuario pide generar el documento final, responde con "DOCUMENTO_LISTO:" seguido del contenido completo formateado
 7. Responde siempre en español`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
