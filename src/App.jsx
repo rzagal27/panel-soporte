@@ -2045,6 +2045,7 @@ function CotizacionGeneradorModule() {
   ]);
   const [saving, setSaving] = useState(false);
   const [editEnviadoA, setEditEnviadoA] = useState(null);
+  const [editingCotId, setEditingCotId] = useState(null);
 
   const TD = {
     blue: "#2564CF", text: "#1F1F1F", muted: "#605E5C",
@@ -2195,6 +2196,14 @@ function CotizacionGeneradorModule() {
       URL.revokeObjectURL(url);
 
       // Save to Firebase history
+      if (editingCotId) {
+        await updateDoc(doc(db, "cotizaciones_generadas", editingCotId), {
+          ...form,
+          partidas,
+          totales: { subtotalNeto: getSubtotalNeto(), gg: getGG(), uti: getUTI(), neto: getNeto(), iva: getIVA(), total: getTotal() },
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
       await addDoc(collection(db, "cotizaciones_generadas"), {
         ...form,
         partidas,
@@ -2202,8 +2211,9 @@ function CotizacionGeneradorModule() {
         enviado_a: "",
         createdAt: new Date().toISOString(),
         createdAtDisplay: new Date().toLocaleDateString("es-CL"),
-      });
+      }); }
 
+      setEditingCotId(null);
       setView("lista");
       setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 10, uti: 10 });
       setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]);
@@ -2223,18 +2233,36 @@ function CotizacionGeneradorModule() {
     if (window.confirm("¿Eliminar esta cotización?")) await deleteDoc(doc(db, "cotizaciones_generadas", id));
   };
 
+  const loadCotForEdit = (c) => {
+    setEditingCotId(c.id);
+    setForm({
+      fmGroup: c.fmGroup || "",
+      citaServicio: c.citaServicio || "",
+      edificio: c.edificio || "",
+      direccion: c.direccion || "",
+      titulo: c.titulo || "",
+      gg: c.gg || 10,
+      uti: c.uti || 10,
+    });
+    setPartidas(c.partidas && c.partidas.length > 0
+      ? c.partidas.map((p) => ({ descripcion: p.descripcion || "", unidad: p.unidad || "m²", cantidad: p.cantidad || "", precioUnitario: p.precioUnitario || "" }))
+      : [{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]
+    );
+    setView("nueva");
+  };
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
       {/* Header */}
       <div style={{ padding: "16px 28px", borderBottom: "1px solid " + TD.border, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>
-            {view === "nueva" ? "Nueva Cotización" : "Cotizaciones Generadas"}
+            {view === "nueva" ? (editingCotId ? "✏️ Editar Cotización" : "Nueva Cotización") : "Cotizaciones Generadas"}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {view === "nueva" ? (
-            <button onClick={() => setView("lista")}
+            <button onClick={() => { setView("lista"); setEditingCotId(null); setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 10, uti: 10 }); setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]); }}
               style={{ background: TD.sidebar, color: TD.muted, border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
               ← Volver
             </button>
@@ -2287,7 +2315,11 @@ function CotizacionGeneradorModule() {
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "right", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                      <button onClick={() => loadCotForEdit(c)}
+                        style={{ background: "#EEF3FB", color: "#2564CF", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                        ✏️ Editar
+                      </button>
                       <button onClick={() => deleteCot(c.id)}
                         style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 14 }}>×</button>
                     </td>
