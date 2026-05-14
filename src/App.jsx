@@ -2031,6 +2031,361 @@ INSTRUCCIONES IMPORTANTES:
   );
 }
 
+
+// ── MÓDULO GENERADOR DE COTIZACIONES ─────────────────────────────────────────
+function CotizacionGeneradorModule() {
+  const [view, setView] = useState("lista"); // "lista" | "nueva"
+  const [historial, setHistorial] = useState([]);
+  const [form, setForm] = useState({
+    fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "",
+    gg: 10, uti: 10,
+  });
+  const [partidas, setPartidas] = useState([
+    { descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }
+  ]);
+  const [saving, setSaving] = useState(false);
+  const [editEnviadoA, setEditEnviadoA] = useState(null);
+
+  const TD = {
+    blue: "#2564CF", text: "#1F1F1F", muted: "#605E5C",
+    light: "#A19F9D", border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
+    sidebar: "#F3F2F1",
+  };
+
+  const UNIDADES = ["m²", "m³", "ml", "un", "gl", "kg", "ton", "hr", "día", "mes", "pt"];
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "cotizaciones_generadas"), (snap) => {
+      setHistorial(snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")));
+    });
+    return () => unsub();
+  }, []);
+
+  const addPartida = () =>
+    setPartidas([...partidas, { descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]);
+
+  const removePartida = (i) => setPartidas(partidas.filter((_, idx) => idx !== i));
+
+  const updatePartida = (i, field, value) =>
+    setPartidas(partidas.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+
+  const getSubtotal = (p) => (parseFloat(p.cantidad) || 0) * (parseFloat(p.precioUnitario) || 0);
+
+  const getSubtotalNeto = () => partidas.reduce((s, p) => s + getSubtotal(p), 0);
+  const getGG = () => getSubtotalNeto() * (parseFloat(form.gg) || 0) / 100;
+  const getUTI = () => (getSubtotalNeto() + getGG()) * (parseFloat(form.uti) || 0) / 100;
+  const getNeto = () => getSubtotalNeto() + getGG() + getUTI();
+  const getIVA = () => getNeto() * 0.19;
+  const getTotal = () => getNeto() + getIVA();
+
+  const fmt = (n) => Math.round(n).toLocaleString("es-CL");
+
+  const generarExcel = async () => {
+    setSaving(true);
+    try {
+      const XLSX = await import("xlsx");
+
+      const wb = XLSX.utils.book_new();
+      const ws = {};
+
+      // Helper to set cell with style metadata
+      const setCell = (ref, value, type = "s") => {
+        ws[ref] = { v: value, t: type };
+      };
+
+      // === HEADER ===
+      setCell("A1", "SOLICITUD DE COTIZACIÓN");
+      setCell("A3", "FM Group:");          setCell("C3", form.fmGroup);
+      setCell("A4", "Cita de Servicio:");  setCell("C4", form.citaServicio);
+      setCell("A5", "Edificio:");          setCell("C5", form.edificio);
+      setCell("A6", "Dirección:");         setCell("C6", form.direccion);
+      setCell("A7", "Título:");            setCell("C7", form.titulo);
+      setCell("A8", "Fecha:");             setCell("C8", new Date().toLocaleDateString("es-CL"));
+
+      // === TABLE HEADERS ===
+      const headerRow = 10;
+      setCell(`A${headerRow}`, "N°");
+      setCell(`B${headerRow}`, "Descripción / Partida");
+      setCell(`C${headerRow}`, "Unidad");
+      setCell(`D${headerRow}`, "Cantidad");
+      setCell(`E${headerRow}`, "Precio Unitario");
+      setCell(`F${headerRow}`, "Subtotal");
+
+      // === PARTIDAS ===
+      partidas.forEach((p, i) => {
+        const row = headerRow + 1 + i;
+        setCell(`A${row}`, i + 1, "n");
+        setCell(`B${row}`, p.descripcion);
+        setCell(`C${row}`, p.unidad);
+        setCell(`D${row}`, parseFloat(p.cantidad) || 0, "n");
+        setCell(`E${row}`, parseFloat(p.precioUnitario) || 0, "n");
+        setCell(`F${row}`, getSubtotal(p), "n");
+      });
+
+      // === TOTALS ===
+      const lastPartidaRow = headerRow + partidas.length;
+      const totalsStart = lastPartidaRow + 2;
+
+      setCell(`E${totalsStart}`,     "Subtotal Neto:");
+      setCell(`F${totalsStart}`,     getSubtotalNeto(), "n");
+      setCell(`E${totalsStart + 1}`, `GG (${form.gg}%):`);
+      setCell(`F${totalsStart + 1}`, getGG(), "n");
+      setCell(`E${totalsStart + 2}`, `UTI (${form.uti}%):`);
+      setCell(`F${totalsStart + 2}`, getUTI(), "n");
+      setCell(`E${totalsStart + 3}`, "Neto:");
+      setCell(`F${totalsStart + 3}`, getNeto(), "n");
+      setCell(`E${totalsStart + 4}`, "IVA (19%):");
+      setCell(`F${totalsStart + 4}`, getIVA(), "n");
+      setCell(`E${totalsStart + 5}`, "TOTAL:");
+      setCell(`F${totalsStart + 5}`, getTotal(), "n");
+
+      // === CONTRACTOR SECTION ===
+      const contratRow = totalsStart + 8;
+      setCell(`A${contratRow}`, "DATOS DEL CONTRATISTA");
+      setCell(`A${contratRow + 2}`, "Nombre Empresa:");
+      setCell(`A${contratRow + 3}`, "RUT Empresa:");
+      setCell(`A${contratRow + 4}`, "Fecha:");
+      setCell(`A${contratRow + 6}`, "Firma Responsable:");
+      setCell(`A${contratRow + 7}`, "_________________________________");
+
+      // === SHEET DIMENSIONS ===
+      ws["!ref"] = `A1:F${contratRow + 10}`;
+      ws["!cols"] = [
+        { wch: 5 },   // A - N°
+        { wch: 40 },  // B - Descripción
+        { wch: 8 },   // C - Unidad
+        { wch: 10 },  // D - Cantidad
+        { wch: 16 },  // E - Precio Unitario
+        { wch: 16 },  // F - Subtotal
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Cotización");
+      const fileName = `Cotizacion_${form.citaServicio || "Sin_Cita"}_${form.edificio || "Sin_Edificio"}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      // Save to Firebase history
+      await addDoc(collection(db, "cotizaciones_generadas"), {
+        ...form,
+        partidas,
+        totales: { subtotalNeto: getSubtotalNeto(), gg: getGG(), uti: getUTI(), neto: getNeto(), iva: getIVA(), total: getTotal() },
+        enviado_a: "",
+        createdAt: new Date().toISOString(),
+        createdAtDisplay: new Date().toLocaleDateString("es-CL"),
+      });
+
+      setView("lista");
+      setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 10, uti: 10 });
+      setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]);
+    } catch (e) {
+      console.error(e);
+      alert("Error al generar el Excel: " + e.message);
+    }
+    setSaving(false);
+  };
+
+  const updateEnviadoA = async (id, value) => {
+    await updateDoc(doc(db, "cotizaciones_generadas", id), { enviado_a: value });
+    setEditEnviadoA(null);
+  };
+
+  const deleteCot = async (id) => {
+    if (window.confirm("¿Eliminar esta cotización?")) await deleteDoc(doc(db, "cotizaciones_generadas", id));
+  };
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: TD.white }}>
+      {/* Header */}
+      <div style={{ padding: "16px 28px", borderBottom: "1px solid " + TD.border, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>
+            {view === "nueva" ? "Nueva Cotización" : "Cotizaciones Generadas"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {view === "nueva" ? (
+            <button onClick={() => setView("lista")}
+              style={{ background: TD.sidebar, color: TD.muted, border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+              ← Volver
+            </button>
+          ) : (
+            <button onClick={() => setView("nueva")}
+              style={{ background: TD.blue, color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+              + Nueva Cotización
+            </button>
+          )}
+        </div>
+      </div>
+
+      {view === "lista" ? (
+        // === HISTORIAL ===
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
+          {historial.length === 0 ? (
+            <div style={{ textAlign: "center", color: TD.light, padding: "60px 0", fontSize: 15 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
+              No hay cotizaciones generadas aún
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid " + TD.border }}>
+                  {["Fecha", "Cita", "Edificio", "Título", "Total", "Enviado a", ""].map((h) => (
+                    <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: "1px solid " + TD.border }}>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{c.createdAtDisplay}</td>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>{c.citaServicio}</td>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.edificio}</td>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.titulo}</td>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>
+                      ${Math.round(c.totales?.total || 0).toLocaleString("es-CL")}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {editEnviadoA === c.id ? (
+                        <input autoFocus defaultValue={c.enviado_a}
+                          onBlur={(e) => updateEnviadoA(c.id, e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") updateEnviadoA(c.id, e.target.value); if (e.key === "Escape") setEditEnviadoA(null); }}
+                          style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit", width: 140 }} />
+                      ) : (
+                        <span onClick={() => setEditEnviadoA(c.id)}
+                          style={{ fontSize: 12, color: c.enviado_a ? TD.text : TD.light, cursor: "pointer", borderBottom: "1px dashed " + TD.light, paddingBottom: 1 }}>
+                          {c.enviado_a || "Clic para agregar..."}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                      <button onClick={() => deleteCot(c.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: TD.light, fontSize: 14 }}>×</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        // === FORMULARIO NUEVA COTIZACIÓN ===
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
+          {/* Datos del proyecto */}
+          <div style={{ background: TD.bg, borderRadius: 10, padding: "20px", marginBottom: 20, border: "1px solid " + TD.border }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: TD.text, marginBottom: 14 }}>📋 Datos del Proyecto</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+              {[
+                { label: "FM Group", key: "fmGroup", placeholder: "Nombre FM Group" },
+                { label: "Cita de Servicio", key: "citaServicio", placeholder: "Ej: SA-1234567" },
+                { label: "Edificio", key: "edificio", placeholder: "Nombre del edificio" },
+              ].map((f) => (
+                <div key={f.key}>
+                  <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>{f.label}</label>
+                  <input value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    placeholder={f.placeholder}
+                    style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>Dirección</label>
+                <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                  placeholder="Dirección del proyecto"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>Título</label>
+                <input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+                  placeholder="Título obra"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>GG (%)</label>
+                <input type="number" value={form.gg} onChange={(e) => setForm({ ...form, gg: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>UTI (%)</label>
+                <input type="number" value={form.uti} onChange={(e) => setForm({ ...form, uti: e.target.value })}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Partidas */}
+          <div style={{ background: TD.bg, borderRadius: 10, padding: "20px", marginBottom: 20, border: "1px solid " + TD.border }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: TD.text }}>🔨 Partidas</div>
+              <button onClick={addPartida}
+                style={{ background: TD.blue, color: "white", border: "none", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer" }}>
+                + Agregar partida
+              </button>
+            </div>
+
+            {/* Header */}
+            <div style={{ display: "grid", gridTemplateColumns: "3fr 80px 90px 120px 120px 32px", gap: 8, marginBottom: 6 }}>
+              {["Descripción", "Unidad", "Cantidad", "Precio Unit.", "Subtotal", ""].map((h) => (
+                <div key={h} style={{ fontSize: 11, color: TD.muted, fontWeight: 600 }}>{h}</div>
+              ))}
+            </div>
+
+            {partidas.map((p, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "3fr 80px 90px 120px 120px 32px", gap: 8, marginBottom: 8 }}>
+                <input placeholder={"Ítem " + (i + 1)} value={p.descripcion} onChange={(e) => updatePartida(i, "descripcion", e.target.value)}
+                  style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit" }} />
+                <select value={p.unidad} onChange={(e) => updatePartida(i, "unidad", e.target.value)}
+                  style={{ padding: "7px 6px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 12 }}>
+                  {UNIDADES.map((u) => <option key={u}>{u}</option>)}
+                </select>
+                <input type="text" inputMode="numeric" placeholder="0" value={p.cantidad} onChange={(e) => updatePartida(i, "cantidad", e.target.value.replace(/[^0-9.]/g, ""))}
+                  style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, textAlign: "right" }} />
+                <input type="text" inputMode="numeric" placeholder="$ 0" value={p.precioUnitario} onChange={(e) => updatePartida(i, "precioUnitario", e.target.value.replace(/[^0-9.]/g, ""))}
+                  style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, textAlign: "right" }} />
+                <div style={{ padding: "7px 10px", borderRadius: 6, background: "white", border: "1px solid " + TD.border, fontSize: 13, textAlign: "right", color: TD.text, fontWeight: 600 }}>
+                  ${fmt(getSubtotal(p))}
+                </div>
+                {partidas.length > 1 ? (
+                  <button onClick={() => removePartida(i)} style={{ background: "none", border: "none", color: TD.light, cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+                ) : <div />}
+              </div>
+            ))}
+
+            {/* Totales */}
+            <div style={{ marginTop: 16, borderTop: "2px solid " + TD.border, paddingTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ width: 280 }}>
+                  {[
+                    { label: "Subtotal Neto", value: fmt(getSubtotalNeto()), bold: false },
+                    { label: `GG (${form.gg}%)`, value: fmt(getGG()), bold: false },
+                    { label: `UTI (${form.uti}%)`, value: fmt(getUTI()), bold: false },
+                    { label: "Neto", value: fmt(getNeto()), bold: false },
+                    { label: "IVA (19%)", value: fmt(getIVA()), bold: false },
+                    { label: "TOTAL", value: fmt(getTotal()), bold: true },
+                  ].map((t) => (
+                    <div key={t.label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: t.bold ? "none" : "1px solid " + TD.border + "88" }}>
+                      <span style={{ fontSize: 13, color: t.bold ? TD.text : TD.muted, fontWeight: t.bold ? 700 : 400 }}>{t.label}</span>
+                      <span style={{ fontSize: t.bold ? 16 : 13, color: t.bold ? TD.blue : TD.text, fontWeight: t.bold ? 700 : 600 }}>
+                        ${t.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Botón generar */}
+          <button onClick={generarExcel} disabled={saving}
+            style={{ width: "100%", background: saving ? TD.light : "#107C10", color: "white", border: "none", borderRadius: 8, padding: "14px", fontSize: 15, cursor: saving ? "not-allowed" : "pointer", fontWeight: 700 }}>
+            {saving ? "Generando..." : "📊 Generar y Descargar Excel"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [tasks, setTasks] = useState({});
   const [categories, setCategories] = useState({});
@@ -2190,10 +2545,10 @@ export default function App() {
           <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
-        {["tareas", "cotizaciones", "gas", "kilometraje", "eett"].map((mod) => (
+        {["tareas", "cotizaciones", "presupuesto", "gas", "kilometraje", "eett"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") { setSelectedSpec(null); } }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : "📋 EETT"}
+            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : mod === "presupuesto" ? "📊 Presupuesto" : "📋 EETT"}
           </button>
         ))}
       </div>
@@ -2204,6 +2559,8 @@ export default function App() {
         <GasModule />
       ) : activeModule === "kilometraje" ? (
         <KilometrajeModule />
+      ) : activeModule === "presupuesto" ? (
+        <CotizacionGeneradorModule />
       ) : activeModule === "eett" ? (
         <EETTModule />
       ) : !selectedSpec ? (
