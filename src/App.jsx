@@ -2198,7 +2198,7 @@ function CotizacionGeneradorModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid " + TD.border }}>
-                  {["Fecha", "Cita", "Edificio", "Título", "Total", "Enviado a", ""].map((h) => (
+                  {["Fecha", "FM Group", "Cita", "Edificio", "Título", "Total", "Enviado a", ""].map((h) => (
                     <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -2207,6 +2207,7 @@ function CotizacionGeneradorModule() {
                 {historial.map((c) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid " + TD.border }}>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{c.createdAtDisplay}</td>
+                    <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.fmGroup}</td>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text, fontWeight: 600 }}>{c.citaServicio}</td>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.edificio}</td>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.titulo}</td>
