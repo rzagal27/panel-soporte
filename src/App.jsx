@@ -2085,113 +2085,24 @@ function CotizacionGeneradorModule() {
   const generarExcel = async () => {
     setSaving(true);
     try {
-      // Generate professional styled Excel via HTML blob
-      const fecha = new Date().toLocaleDateString("es-CL");
-      const firstRow = 11;
-      const lastRow  = firstRow + partidas.length - 1;
-      const T  = lastRow + 2;
-      const ggRow  = T + 1;
-      const utiRow = T + 2;
-      const netoRow = T + 3;
-      const ivaRow  = T + 4;
-      const totalRow = T + 5;
-      const csRow = totalRow + 4;
-      const firmaRow = csRow + 7;
+      // Call Python API to generate proper .xlsx
+      const response = await fetch("/api/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, partidas }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || "Error al generar Excel");
 
-      const ggPct  = parseFloat(form.gg)  || 0;
-      const utiPct = parseFloat(form.uti) || 0;
-
-      const partidaRows = partidas.map((p, i) => {
-        const bg = i % 2 === 0 ? "#FFFFFF" : "#D6E4F7";
-        const row = firstRow + i;
-        return `<tr>
-          <td style="background:${bg};color:#2564CF;font-weight:bold;text-align:center;border:1px solid #BFBFBF">${i+1}</td>
-          <td style="background:${bg};border:1px solid #BFBFBF">${p.descripcion || ""}</td>
-          <td style="background:${bg};text-align:center;border:1px solid #BFBFBF">${p.unidad}</td>
-          <td style="background:#FFF2CC;text-align:right;border:1px solid #BFBFBF" x:num>${parseFloat(p.cantidad)||0}</td>
-          <td style="background:#FFF2CC;text-align:right;border:1px solid #BFBFBF" x:num>${parseFloat(p.precioUnitario)||0}</td>
-          <td style="background:${bg};font-weight:bold;text-align:right;border:1px solid #BFBFBF" x:fmla="=D${row}*E${row}" x:num>${getSubtotal(p)}</td>
-        </tr>`;
-      }).join("");
-
-      const html = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8">
-<style>
-  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
-  table { border-collapse: collapse; width: 100%; }
-  td, th { padding: 4px 8px; font-size: 11pt; }
-  .hdr-dark { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:16pt; text-align:center; height:36px; }
-  .hdr-bar  { background:#2564CF; height:6px; }
-  .hdr-col1 { background:#EBF3FB; font-weight:bold; color:#1F3864; border:1px solid #BFBFBF; }
-  .hdr-col2 { background:#FFFFFF; border:1px solid #BFBFBF; }
-  .tbl-hdr  { background:#2564CF; color:#FFFFFF; font-weight:bold; text-align:center; border:2px solid #1F3864; height:22px; }
-  .tot-lbl  { background:#F2F2F2; font-weight:bold; color:#1F3864; text-align:right; border:1px solid #BFBFBF; }
-  .tot-val  { background:#F2F2F2; text-align:right; border:1px solid #BFBFBF; font-weight:bold; }
-  .tot-total-lbl { background:#C6EFCE; font-weight:bold; color:#107C10; font-size:13pt; text-align:right; border:2px solid #1F3864; }
-  .tot-total-val { background:#C6EFCE; font-weight:bold; color:#107C10; font-size:14pt; text-align:right; border:2px solid #1F3864; }
-  .sec-hdr  { background:#1F3864; color:#FFFFFF; font-weight:bold; font-size:12pt; text-align:center; height:22px; }
-  .fld-lbl  { background:#EBF3FB; font-weight:bold; color:#1F3864; border:1px solid #BFBFBF; }
-  .fld-val  { background:#FFFFFF; border:1px solid #BFBFBF; }
-  .firma-box{ background:#EBF3FB; font-weight:bold; color:#1F3864; text-align:center; height:55px; border:2px solid #1F3864; vertical-align:bottom; }
-  .nota-roja{ color:#FF0000; font-style:italic; font-size:9pt; text-align:center; }
-  .amarillo { background:#FFF2CC; }
-</style>
-</head>
-<body>
-<table>
-  <!-- TÍTULO -->
-  <tr><td colspan="6" class="hdr-dark">SOLICITUD DE COTIZACIÓN</td></tr>
-  <tr><td colspan="6" class="hdr-bar"></td></tr>
-  <!-- DATOS PROYECTO -->
-  <tr><td class="hdr-col1">FM Group:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${form.fmGroup}</td></tr>
-  <tr><td class="hdr-col1">Cita de Servicio:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${form.citaServicio}</td></tr>
-  <tr><td class="hdr-col1">Edificio:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${form.edificio}</td></tr>
-  <tr><td class="hdr-col1">Dirección:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${form.direccion}</td></tr>
-  <tr><td class="hdr-col1">Título:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${form.titulo}</td></tr>
-  <tr><td class="hdr-col1">Fecha:</td><td class="hdr-col1"></td><td colspan="4" class="hdr-col2">${fecha}</td></tr>
-  <tr><td colspan="6" style="height:8px"></td></tr>
-  <!-- ENCABEZADO TABLA -->
-  <tr>
-    <th class="tbl-hdr" width="40">N°</th>
-    <th class="tbl-hdr" width="360">Descripción / Partida</th>
-    <th class="tbl-hdr" width="70">Unidad</th>
-    <th class="tbl-hdr" width="90">Cantidad</th>
-    <th class="tbl-hdr" width="130">Precio Unit.</th>
-    <th class="tbl-hdr" width="130">Subtotal</th>
-  </tr>
-  <!-- PARTIDAS -->
-  ${partidaRows}
-  <tr><td colspan="6" style="height:8px"></td></tr>
-  <!-- TOTALES -->
-  <tr><td colspan="3"></td><td></td><td class="tot-lbl">Subtotal Neto:</td><td class="tot-val" x:num>${Math.round(getSubtotalNeto()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="3"></td><td class="amarillo" style="text-align:center;border:1px solid #BFBFBF;font-weight:bold;color:#CC0000" x:num>${ggPct}</td><td class="tot-lbl">GG (${ggPct}%):</td><td class="tot-val" x:num>${Math.round(getGG()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="3"></td><td class="amarillo" style="text-align:center;border:1px solid #BFBFBF;font-weight:bold;color:#CC0000" x:num>${utiPct}</td><td class="tot-lbl">UTI (${utiPct}%):</td><td class="tot-val" x:num>${Math.round(getUTI()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="3"></td><td></td><td class="tot-lbl">Neto:</td><td class="tot-val" x:num>${Math.round(getNeto()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="3"></td><td></td><td class="tot-lbl">IVA (19%):</td><td class="tot-val" x:num>${Math.round(getIVA()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="3"></td><td></td><td class="tot-total-lbl">TOTAL:</td><td class="tot-total-val" x:num>${Math.round(getTotal()).toLocaleString("es-CL")}</td></tr>
-  <tr><td colspan="6" style="font-size:9pt;font-style:italic;color:#7F7F7F;text-align:center">Las celdas en amarillo son editables (Cantidad, Precio Unitario, GG% y UTI%)</td></tr>
-  <tr><td colspan="6" style="height:14px"></td></tr>
-  <!-- CONTRATISTA -->
-  <tr><td colspan="6" class="sec-hdr">DATOS DEL CONTRATISTA</td></tr>
-  <tr><td colspan="6" style="height:6px"></td></tr>
-  <tr><td class="fld-lbl">Nombre Empresa:</td><td colspan="5" class="fld-val"></td></tr>
-  <tr><td class="fld-lbl">RUT Empresa:</td><td colspan="5" class="fld-val"></td></tr>
-  <tr><td class="fld-lbl">Fecha:</td><td colspan="5" class="fld-val"></td></tr>
-  <tr><td colspan="6" style="height:10px"></td></tr>
-  <tr>
-    <td colspan="3" class="firma-box">FIRMA EMPRESA</td>
-    <td colspan="3" class="firma-box">TIMBRE EMPRESA</td>
-  </tr>
-  <tr><td colspan="6" class="nota-roja">* Firma y RUT empresa son OBLIGATORIOS para validar esta cotización</td></tr>
-</table>
-</body></html>`;
-
-      const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      // Download the base64 xlsx
+      const byteChars = atob(result.file);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Cotizacion_" + (form.citaServicio || "Sin_Cita") + "_" + (form.edificio || "Sin_Edificio") + ".xls";
+      a.download = "Cotizacion_" + (form.citaServicio || "Sin_Cita") + "_" + (form.edificio || "Sin_Edificio") + ".xlsx";
       a.click();
       URL.revokeObjectURL(url);
 
