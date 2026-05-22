@@ -2045,6 +2045,7 @@ function CotizacionGeneradorModule() {
   ]);
   const [saving, setSaving] = useState(false);
   const [editEnviadoA, setEditEnviadoA] = useState(null);
+  const [editFechaLimite, setEditFechaLimite] = useState(null);
   const [editingCotId, setEditingCotId] = useState(null);
 
   const TD = {
@@ -2140,6 +2141,38 @@ function CotizacionGeneradorModule() {
     setEditEnviadoA(null);
   };
 
+  const updateFechaLimite = async (id, value) => {
+    await updateDoc(doc(db, "cotizaciones_generadas", id), { fecha_limite: value });
+    setEditFechaLimite(null);
+  };
+
+  const getCountdown = (fechaLimite) => {
+    if (!fechaLimite) return null;
+    const hoy = new Date();
+    const limite = new Date(fechaLimite + "T23:59:59");
+    const diff = limite - hoy;
+    const dias = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return dias;
+  };
+
+  const openOutlook = (c) => {
+    const asunto = encodeURIComponent("Solicitud de Cotizacion - " + c.citaServicio + " - " + c.edificio);
+    const cuerpo = encodeURIComponent(
+      "Estimado/a Contratista,\n\n" +
+      "Adjunto encontrara la solicitud de cotizacion para:\n\n" +
+      "Cita: " + c.citaServicio + "\n" +
+      "FM Group: " + c.fmGroup + "\n" +
+      "Edificio: " + c.edificio + "\n" +
+      "Direccion: " + c.direccion + "\n" +
+      "Titulo: " + c.titulo + "\n\n" +
+      "Por favor envie su oferta economica a la brevedad.\n\n" +
+      "Saludos,\n" +
+      "Rolando Zagal\n" +
+      "Especialista de Soporte - Field Management"
+    );
+    window.open("mailto:?subject=" + asunto + "&body=" + cuerpo);
+  };
+
   const deleteCot = async (id) => {
     if (window.confirm("¿Eliminar esta cotización?")) await deleteDoc(doc(db, "cotizaciones_generadas", id));
   };
@@ -2198,7 +2231,7 @@ function CotizacionGeneradorModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid " + TD.border }}>
-                  {["Fecha", "FM Group", "Cita", "Edificio", "Título", "Total", "Enviado a", ""].map((h) => (
+                  {["Fecha", "FM Group", "Cita", "Edificio", "Título", "Total", "Enviado a", "Fecha límite", ""].map((h) => (
                     <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -2227,7 +2260,37 @@ function CotizacionGeneradorModule() {
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                    <td style={{ padding: "10px 12px" }}>
+                      {editFechaLimite === c.id ? (
+                        <input type="date" autoFocus defaultValue={c.fecha_limite || ""}
+                          onBlur={(e) => updateFechaLimite(c.id, e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") updateFechaLimite(c.id, e.target.value); if (e.key === "Escape") setEditFechaLimite(null); }}
+                          style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid " + TD.blue, fontSize: 12, fontFamily: "inherit" }} />
+                      ) : (
+                        <div onClick={() => setEditFechaLimite(c.id)} style={{ cursor: "pointer" }}>
+                          {c.fecha_limite ? (
+                            (() => {
+                              const dias = getCountdown(c.fecha_limite);
+                              const color = dias < 0 ? "#D13438" : dias <= 3 ? "#FF8C00" : dias <= 7 ? "#FFB900" : "#107C10";
+                              const texto = dias < 0 ? "Vencido " + Math.abs(dias) + "d" : dias === 0 ? "Hoy!" : dias + " días";
+                              return (
+                                <div>
+                                  <div style={{ fontSize: 11, color: TD.muted }}>{new Date(c.fecha_limite + "T12:00:00").toLocaleDateString("es-CL")}</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color }}>{texto}</div>
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <span style={{ fontSize: 11, color: TD.light, borderBottom: "1px dashed " + TD.light }}>+ Agregar fecha</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "right", display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                      <button onClick={() => openOutlook(c)}
+                        style={{ background: "#0078D4", color: "white", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        📧 Enviar
+                      </button>
                       <button onClick={() => loadCotForEdit(c)}
                         style={{ background: "#EEF3FB", color: "#2564CF", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
                         ✏️ Editar
