@@ -2157,18 +2157,24 @@ function CotizacionGeneradorModule() {
 
   const openOutlook = (c) => {
     const asunto = encodeURIComponent("Solicitud de Cotizacion - " + c.citaServicio + " - " + c.edificio);
+    let plazoTexto = "(indicar plazo)";
+    if (c.fecha_limite) {
+      const fecha = new Date(c.fecha_limite + "T12:00:00");
+      const dias = ["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
+      plazoTexto = dias[fecha.getDay()] + " " + String(fecha.getDate()).padStart(2,"0") + "/" + String(fecha.getMonth()+1).padStart(2,"0") + " 12:00";
+    }
     const cuerpo = encodeURIComponent(
-      "Estimado/a Contratista,\n\n" +
-      "Adjunto encontrara la solicitud de cotizacion para:\n\n" +
+      "Estimado,\n\n" +
+      "Junto con saludar, adjunto encontrara la solicitud de cotizacion para:\n\n" +
       "Cita: " + c.citaServicio + "\n" +
       "FM Group: " + c.fmGroup + "\n" +
       "Edificio: " + c.edificio + "\n" +
       "Direccion: " + c.direccion + "\n" +
       "Titulo: " + c.titulo + "\n\n" +
-      "Por favor envie su oferta economica a la brevedad.\n\n" +
-      "Saludos,\n" +
-      "Rolando Zagal\n" +
-      "Especialista de Soporte - Field Management"
+      "Plazo para enviar oferta: " + plazoTexto + "\n\n" +
+      "Responder a este mismo correo y usar el ppto adjunto - enviar al Gerente con copia a mi.\n\n" +
+      "Quedo atento a consultas o dudas.\n\n" +
+      "Saludos,"
     );
     window.open("mailto:?subject=" + asunto + "&body=" + cuerpo);
   };
