@@ -2038,7 +2038,7 @@ function CotizacionGeneradorModule() {
   const [historial, setHistorial] = useState([]);
   const [form, setForm] = useState({
     fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "",
-    gg: 10, uti: 10,
+    gg: 0, uti: 0,
   });
   const [partidas, setPartidas] = useState([
     { descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }
@@ -2046,6 +2046,7 @@ function CotizacionGeneradorModule() {
   const [saving, setSaving] = useState(false);
   const [editEnviadoA, setEditEnviadoA] = useState(null);
   const [editFechaLimite, setEditFechaLimite] = useState(null);
+  const [searchCot, setSearchCot] = useState("");
   const [editingCotId, setEditingCotId] = useState(null);
 
   const TD = {
@@ -2228,6 +2229,15 @@ function CotizacionGeneradorModule() {
       {view === "lista" ? (
         // === HISTORIAL ===
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
+          {/* Buscador */}
+          <div style={{ marginBottom: 16 }}>
+            <input
+              placeholder="🔍 Buscar por cita, edificio, FM Group o título..."
+              value={searchCot}
+              onChange={(e) => setSearchCot(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+            />
+          </div>
           {historial.length === 0 ? (
             <div style={{ textAlign: "center", color: TD.light, padding: "60px 0", fontSize: 15 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
@@ -2243,7 +2253,16 @@ function CotizacionGeneradorModule() {
                 </tr>
               </thead>
               <tbody>
-                {historial.map((c) => (
+                {historial.filter((c) => {
+                    if (!searchCot.trim()) return true;
+                    const q = searchCot.toLowerCase();
+                    return (
+                      (c.citaServicio || "").toLowerCase().includes(q) ||
+                      (c.edificio || "").toLowerCase().includes(q) ||
+                      (c.fmGroup || "").toLowerCase().includes(q) ||
+                      (c.titulo || "").toLowerCase().includes(q)
+                    );
+                  }).map((c) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid " + TD.border }}>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.muted }}>{c.createdAtDisplay}</td>
                     <td style={{ padding: "10px 12px", fontSize: 13, color: TD.text }}>{c.fmGroup}</td>
@@ -2324,9 +2343,21 @@ function CotizacionGeneradorModule() {
               ].map((f) => (
                 <div key={f.key}>
                   <label style={{ fontSize: 11, color: TD.muted, display: "block", marginBottom: 4, fontWeight: 600 }}>{f.label}</label>
-                  <input value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                    placeholder={f.placeholder}
-                    style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                  {f.key === "fmGroup" ? (
+                    <select value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}>
+                      <option value="">Seleccionar FM Group...</option>
+                      <option>Concepcion Norte</option>
+                      <option>Osorno</option>
+                      <option>Santiago Oeste</option>
+                      <option>Santiago Este</option>
+                      <option>Puerto Montt</option>
+                    </select>
+                  ) : (
+                    <input value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                      placeholder={f.placeholder}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                  )}
                 </div>
               ))}
             </div>
