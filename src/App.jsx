@@ -2174,6 +2174,7 @@ function CotizacionGeneradorModule() {
       "Titulo: " + c.titulo + "\n\n" +
       "Plazo para enviar oferta: " + plazoTexto + "\n\n" +
       "Responder a este mismo correo y usar el ppto adjunto - enviar al Gerente con copia a mi.\n\n" +
+      "Una vez finalizado el trabajo, reportarme y enviar fotografias para cerrar la cita de servicio.\n\n" +
       "Quedo atento a consultas o dudas.\n\n" +
       "Saludos,"
     );
