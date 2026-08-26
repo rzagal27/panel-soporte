@@ -2105,6 +2105,7 @@ function CotizacionGeneradorModule() {
   const [editFechaLimite, setEditFechaLimite] = useState(null);
   const [searchCot, setSearchCot] = useState("");
   const [editingCotId, setEditingCotId] = useState(null);
+  const [llavesMap, setLlavesMap] = useState({});
 
   const TD = {
     blue: "#2564CF", text: "#1F1F1F", muted: "#605E5C",
@@ -2121,6 +2122,45 @@ function CotizacionGeneradorModule() {
     });
     return () => unsub();
   }, []);
+
+  const normLlave = (str) =>
+    (str || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "llaves"), (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        map[normLlave(data.edificio)] = { id: d.id, ...data };
+      });
+      setLlavesMap(map);
+    });
+    return () => unsub();
+  }, []);
+
+  const toggleLlaves = async (c) => {
+    const nombre = (c.edificio || "").trim();
+    if (!nombre) { alert("Esta cotización no tiene un edificio asignado."); return; }
+    const key = normLlave(nombre);
+    const actual = llavesMap[key];
+    if (actual) {
+      const desde = actual.fecha ? new Date(actual.fecha + "T12:00:00").toLocaleDateString("es-CL") : "fecha desconocida";
+      if (window.confirm("🔑 Las llaves de \"" + nombre + "\" ya están prestadas a " + (actual.contratista || "un contratista") + " desde el " + desde + ".\n\n¿Marcarlas como DEVUELTAS?")) {
+        await deleteDoc(doc(db, "llaves", actual.id));
+      }
+    } else {
+      const contratista = window.prompt("Prestar llaves de \"" + nombre + "\".\n¿A qué contratista?", c.enviado_a || "");
+      if (contratista === null) return;
+      if (!contratista.trim()) { alert("Debes indicar el contratista."); return; }
+      await addDoc(collection(db, "llaves"), {
+        edificio: nombre,
+        contratista: contratista.trim(),
+        fecha: new Date().toISOString().split("T")[0],
+        cotizacionId: c.id,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  };
 
   const addPartida = () =>
     setPartidas([...partidas, { descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]);
@@ -2305,7 +2345,7 @@ function CotizacionGeneradorModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid " + TD.border }}>
-                  {["Fecha", "FM Group", "Cita", "Edificio", "Título", "Total", "Enviado a", "Fecha límite", ""].map((h) => (
+                  {["Fecha", "FM Group", "Cita", "Edificio", "Título", "Total", "Enviado a", "Fecha límite", "Llaves", ""].map((h) => (
                     <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 12, color: TD.muted, fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -2368,6 +2408,20 @@ function CotizacionGeneradorModule() {
                           )}
                         </div>
                       )}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {(() => {
+                        const info = llavesMap[normLlave(c.edificio)];
+                        const prestadas = !!info;
+                        return (
+                          <span
+                            onClick={() => toggleLlaves(c)}
+                            title={prestadas ? ("Prestadas a " + (info.contratista || "contratista") + (info.fecha ? " desde " + new Date(info.fecha + "T12:00:00").toLocaleDateString("es-CL") : "") + " · clic para devolver") : "Clic para prestar"}
+                            style={{ cursor: "pointer", fontSize: 11, fontWeight: 700, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap", background: prestadas ? "#FDECEA" : "#E7F6EC", color: prestadas ? "#D13438" : "#107C10", border: "1px solid " + (prestadas ? "#F4ABAB" : "#A6E0BC") }}>
+                            {prestadas ? "🔑 Sí" : "No"}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "right", display: "flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
                       <button onClick={() => openOutlook(c)}
