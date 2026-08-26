@@ -86,10 +86,10 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 
 const SPECIALISTS = [
-  { id: "spec1", name: "Rolando Zagal", role: "Especialista de Soporte", avatar: "RZ", color: "#2D6A4F", managers: ["Juan Nahuel", "Raúl Dote"] },
-  { id: "spec2", name: "Malena Espinoza", role: "Especialista de Soporte", avatar: "ME", color: "#1B4F72", managers: ["Edgar Solís", "Ricardo Orellana"] },
-  { id: "spec3", name: "Vicente García", role: "Especialista de Soporte", avatar: "VG", color: "#6B2D8B", managers: ["Alan Miranda", "Juan Palma"] },
-  { id: "spec5", name: "Ricardo Cortés", role: "Especialista de Soporte", avatar: "RC", color: "#A4262C", managers: [] },
+  { id: "spec1", name: "Rolando Zagal", role: "Supervisor de Soporte", avatar: "RZ", color: "#2D6A4F", managers: [] },
+  { id: "spec2", name: "Malena Espinoza", role: "Especialista de Soporte", avatar: "ME", color: "#1B4F72", managers: ["José Reyes", "Edgar Solís", "Ricardo Orellana"] },
+  { id: "spec3", name: "Vicente García", role: "Especialista de Soporte", avatar: "VG", color: "#6B2D8B", managers: ["Patricio Toloza", "Juan Nahuel", "Raúl Dote"] },
+  { id: "spec5", name: "Ricardo Cortés", role: "Especialista de Soporte", avatar: "RC", color: "#A4262C", managers: ["Erwin Hermosilla", "René Videla"] },
 ];
 
 const GRUPOS_FM = [
@@ -2800,6 +2800,26 @@ export default function App() {
     border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8",
   };
 
+  const specCard = (spec) => {
+    const pending = pendingCount(spec.id), total = getSpecTasks(spec.id).length;
+    return (
+      <div key={spec.id} onClick={() => { setSelectedSpec(spec); setSelectedCategory(null); }}
+        style={{ background: TD.white, borderRadius: 8, padding: "20px 18px", cursor: "pointer", border: "1px solid " + TD.border, transition: "all 0.15s", textAlign: "center" }}
+        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = TD.blue; }}
+        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = TD.border; }}>
+        <div style={{ width: 52, height: 52, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, margin: "0 auto 12px" }}>{spec.avatar}</div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: TD.text, marginBottom: 2 }}>{spec.name}</div>
+        <div style={{ fontSize: 11, color: TD.light, marginBottom: 10 }}>{spec.role}</div>
+        <div style={{ marginBottom: 12 }}>{spec.managers.map((m) => <span key={m} style={{ display: "inline-block", background: TD.sidebarActive, color: TD.blue, borderRadius: 3, padding: "1px 7px", fontSize: 10, margin: 2, fontWeight: 500 }}>{m}</span>)}</div>
+        <div style={{ fontSize: 12, color: pending > 0 ? TD.blue : TD.light }}>
+          <span style={{ fontWeight: 700, fontSize: 18 }}>{pending}</span>
+          <span style={{ marginLeft: 4 }}>pendiente{pending !== 1 ? "s" : ""}</span>
+          <span style={{ color: TD.light }}> / {total} total</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", background: TD.bg, height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
@@ -2833,27 +2853,13 @@ export default function App() {
       ) : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
+          <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>SUPERVISOR DE SOPORTE</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, maxWidth: 1000, marginBottom: 32 }}>
+            {SPECIALISTS.filter((s) => s.role.indexOf("Supervisor") !== -1).map((spec) => specCard(spec))}
+          </div>
           <div style={{ fontSize: 13, color: TD.muted, marginBottom: 20, fontWeight: 600, letterSpacing: 0.5 }}>ESPECIALISTAS DE SOPORTE</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12, maxWidth: 1000 }}>
-            {SPECIALISTS.map((spec) => {
-              const pending = pendingCount(spec.id), total = getSpecTasks(spec.id).length;
-              return (
-                <div key={spec.id} onClick={() => { setSelectedSpec(spec); setSelectedCategory(null); }}
-                  style={{ background: TD.white, borderRadius: 8, padding: "20px 18px", cursor: "pointer", border: "1px solid " + TD.border, transition: "all 0.15s", textAlign: "center" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; e.currentTarget.style.borderColor = TD.blue; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = TD.border; }}>
-                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: spec.color, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, margin: "0 auto 12px" }}>{spec.avatar}</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: TD.text, marginBottom: 2 }}>{spec.name}</div>
-                  <div style={{ fontSize: 11, color: TD.light, marginBottom: 10 }}>{spec.role}</div>
-                  <div style={{ marginBottom: 12 }}>{spec.managers.map((m) => <span key={m} style={{ display: "inline-block", background: TD.sidebarActive, color: TD.blue, borderRadius: 3, padding: "1px 7px", fontSize: 10, margin: 2, fontWeight: 500 }}>{m}</span>)}</div>
-                  <div style={{ fontSize: 12, color: pending > 0 ? TD.blue : TD.light }}>
-                    <span style={{ fontWeight: 700, fontSize: 18 }}>{pending}</span>
-                    <span style={{ marginLeft: 4 }}>pendiente{pending !== 1 ? "s" : ""}</span>
-                    <span style={{ color: TD.light }}> / {total} total</span>
-                  </div>
-                </div>
-              );
-            })}
+            {SPECIALISTS.filter((s) => s.role.indexOf("Supervisor") === -1).map((spec) => specCard(spec))}
           </div>
         </div>
       ) : (
