@@ -89,7 +89,12 @@ const SPECIALISTS = [
   { id: "spec1", name: "Rolando Zagal", role: "Especialista de Soporte", avatar: "RZ", color: "#2D6A4F", managers: ["Juan Nahuel", "Raúl Dote"] },
   { id: "spec2", name: "Malena Espinoza", role: "Especialista de Soporte", avatar: "ME", color: "#1B4F72", managers: ["Edgar Solís", "Ricardo Orellana"] },
   { id: "spec3", name: "Vicente García", role: "Especialista de Soporte", avatar: "VG", color: "#6B2D8B", managers: ["Alan Miranda", "Juan Palma"] },
-  { id: "spec4", name: "Josué Naranjo", role: "Especialista de Soporte", avatar: "JN", color: "#7D3C0A", managers: ["José Reyes", "Patricio Toloza"] },
+  { id: "spec5", name: "Ricardo Cortés", role: "Especialista de Soporte", avatar: "RC", color: "#A4262C", managers: [] },
+];
+
+const GRUPOS_FM = [
+  "Concepcion Norte", "Concepción Sur", "Talca", "Temuco", "Rancagua",
+  "Santiago Sur", "Santiago Oeste", "Santiago Este", "Osorno", "Puerto Montt",
 ];
 
 const PRIORITIES = ["Alta", "Media", "Baja"];
@@ -2106,6 +2111,7 @@ function CotizacionGeneradorModule() {
   const [searchCot, setSearchCot] = useState("");
   const [editingCotId, setEditingCotId] = useState(null);
   const [llavesMap, setLlavesMap] = useState({});
+  const [grupoSel, setGrupoSel] = useState(null);
 
   const TD = {
     blue: "#2564CF", text: "#1F1F1F", muted: "#605E5C",
@@ -2253,29 +2259,63 @@ function CotizacionGeneradorModule() {
     return dias;
   };
 
-  const openOutlook = (c) => {
-    const asunto = encodeURIComponent("Solicitud de Cotizacion - " + c.citaServicio + " - " + c.edificio);
+  const openOutlook = async (c) => {
+    const asuntoPlano = "Solicitud de Cotizacion - " + (c.citaServicio || "") + " - " + (c.edificio || "");
     let plazoTexto = "(indicar plazo)";
     if (c.fecha_limite) {
       const fecha = new Date(c.fecha_limite + "T12:00:00");
       const dias = ["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
       plazoTexto = dias[fecha.getDay()] + " " + String(fecha.getDate()).padStart(2,"0") + "/" + String(fecha.getMonth()+1).padStart(2,"0") + " 12:00";
     }
-    const cuerpo = encodeURIComponent(
+    const cuerpoPlano =
       "Estimado,\n\n" +
       "Junto con saludar, adjunto encontrara la solicitud de cotizacion para:\n\n" +
-      "Cita: " + c.citaServicio + "\n" +
-      "FM Group: " + c.fmGroup + "\n" +
-      "Edificio: " + c.edificio + "\n" +
-      "Direccion: " + c.direccion + "\n" +
-      "Titulo: " + c.titulo + "\n\n" +
+      "Cita: " + (c.citaServicio || "") + "\n" +
+      "FM Group: " + (c.fmGroup || "") + "\n" +
+      "Edificio: " + (c.edificio || "") + "\n" +
+      "Direccion: " + (c.direccion || "") + "\n" +
+      "Titulo: " + (c.titulo || "") + "\n\n" +
       "Plazo para enviar oferta: " + plazoTexto + "\n\n" +
       "Responder a este mismo correo y usar el ppto adjunto - enviar al Gerente con copia a mi.\n\n" +
       "Una vez finalizado el trabajo, reportarme y enviar fotografias para cerrar la cita de servicio.\n\n" +
       "Quedo atento a consultas o dudas.\n\n" +
-      "Saludos,"
-    );
-    window.open("mailto:?subject=" + asunto + "&body=" + cuerpo);
+      "Saludos,";
+
+    const abrirMailto = () => {
+      window.open("mailto:?subject=" + encodeURIComponent(asuntoPlano) + "&body=" + encodeURIComponent(cuerpoPlano));
+    };
+
+    // En celular: intentar abrir el correo con el Excel YA adjunto (hoja de compartir del sistema).
+    const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+    if (esMovil && navigator.canShare) {
+      try {
+        const response = await fetch("/api/excel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...c, partidas: c.partidas || [] }),
+        });
+        const result = await response.json();
+        if (response.ok && result.file) {
+          const byteChars = atob(result.file);
+          const byteArr = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+          const file = new File(
+            [byteArr],
+            "Cotizacion_" + (c.citaServicio || "Sin_Cita") + "_" + (c.edificio || "Sin_Edificio") + ".xlsx",
+            { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+          );
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: asuntoPlano, text: cuerpoPlano });
+            return;
+          }
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return; // el usuario canceló el compartir
+        // cualquier otro problema: caer al mailto de respaldo
+      }
+    }
+
+    abrirMailto();
   };
 
   const deleteCot = async (id) => {
@@ -2306,7 +2346,7 @@ function CotizacionGeneradorModule() {
       <div style={{ padding: "16px 28px", borderBottom: "1px solid " + TD.border, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: TD.blue, letterSpacing: -0.3 }}>
-            {view === "nueva" ? (editingCotId ? "✏️ Editar Cotización" : "Nueva Cotización") : "Cotizaciones Generadas"}
+            {view === "nueva" ? (editingCotId ? "✏️ Editar Cotización" : "Nueva Cotización") : (grupoSel ? "📊 " + grupoSel : "Presupuesto por Grupo")}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -2315,16 +2355,42 @@ function CotizacionGeneradorModule() {
               style={{ background: TD.sidebar, color: TD.muted, border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
               ← Volver
             </button>
-          ) : (
-            <button onClick={() => setView("nueva")}
-              style={{ background: TD.blue, color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
-              + Nueva Cotización
-            </button>
-          )}
+          ) : grupoSel ? (
+            <>
+              <button onClick={() => { setGrupoSel(null); setSearchCot(""); }}
+                style={{ background: TD.sidebar, color: TD.muted, border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+                ← Grupos
+              </button>
+              <button onClick={() => { setForm({ fmGroup: grupoSel, citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 0, uti: 0 }); setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]); setEditingCotId(null); setView("nueva"); }}
+                style={{ background: TD.blue, color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+                + Nueva Cotización
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 
       {view === "lista" ? (
+        grupoSel === null ? (
+          <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
+            <div style={{ fontSize: 13, color: TD.muted, marginBottom: 18 }}>Selecciona un grupo para ver sus cotizaciones</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 14 }}>
+              {GRUPOS_FM.map((g) => {
+                const count = historial.filter((c) => (c.fmGroup || "") === g).length;
+                return (
+                  <div key={g} onClick={() => { setGrupoSel(g); setSearchCot(""); }}
+                    style={{ cursor: "pointer", background: TD.bg, border: "1px solid " + TD.border, borderRadius: 12, padding: "18px" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = TD.blue; e.currentTarget.style.boxShadow = "0 4px 14px rgba(37,100,207,0.12)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = TD.border; e.currentTarget.style.boxShadow = "none"; }}>
+                    <div style={{ fontSize: 26, marginBottom: 8 }}>🏢</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: TD.text, marginBottom: 4 }}>{g}</div>
+                    <div style={{ fontSize: 12, color: TD.muted }}>{count} {count === 1 ? "cotización" : "cotizaciones"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
         // === HISTORIAL ===
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
           {/* Buscador */}
@@ -2336,10 +2402,10 @@ function CotizacionGeneradorModule() {
               style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
             />
           </div>
-          {historial.length === 0 ? (
+          {historial.filter((c) => (c.fmGroup || "") === grupoSel).length === 0 ? (
             <div style={{ textAlign: "center", color: TD.light, padding: "60px 0", fontSize: 15 }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
-              No hay cotizaciones generadas aún
+              No hay cotizaciones para {grupoSel} aún
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2352,6 +2418,7 @@ function CotizacionGeneradorModule() {
               </thead>
               <tbody>
                 {historial.filter((c) => {
+                    if (grupoSel && (c.fmGroup || "") !== grupoSel) return false;
                     if (!searchCot.trim()) return true;
                     const q = searchCot.toLowerCase();
                     return (
@@ -2441,6 +2508,7 @@ function CotizacionGeneradorModule() {
             </table>
           )}
         </div>
+        )
       ) : (
         // === FORMULARIO NUEVA COTIZACIÓN ===
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
