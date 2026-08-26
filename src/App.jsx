@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import emailjs from "@emailjs/browser";
 import * as XLSX from "xlsx";
+import { EDIFICIOS } from "./buildings";
 // docx generation via HTML blob
 
 const EMAILJS_SERVICE = "service_uv11blm";
@@ -15,6 +16,62 @@ const CLOUDINARY_CLOUD = "du0wkcpgj";
 const CLOUDINARY_PRESET = "l2shkadh";
 
 emailjs.init(EMAILJS_KEY);
+
+function EdificioAutocomplete({ value, grupo, border, onType, onPick }) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const norm = (str) =>
+    (str || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const q = norm(value);
+  let base = EDIFICIOS;
+  if (grupo) {
+    const delGrupo = EDIFICIOS.filter((b) => norm(b.grupo) === norm(grupo));
+    if (delGrupo.length > 0) base = delGrupo;
+  }
+  const matches =
+    q.length === 0
+      ? base.slice(0, 8)
+      : base
+          .filter((b) => norm(b.nombre).indexOf(q) !== -1 || norm(b.direccion).indexOf(q) !== -1)
+          .slice(0, 8);
+
+  return (
+    <div ref={boxRef} style={{ position: "relative" }}>
+      <input
+        value={value}
+        onChange={(e) => { onType(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Escribe para buscar..."
+        style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+      />
+      {open && matches.length > 0 ? (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, background: "white", border: "1px solid " + border, borderRadius: 6, marginTop: 2, maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}>
+          {matches.map((b, i) => (
+            <div
+              key={i}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onPick(b); setOpen(false); }}
+              style={{ padding: "8px 10px", cursor: "pointer", borderBottom: i < matches.length - 1 ? "1px solid #F0F0F0" : "none" }}
+            >
+              <div style={{ fontSize: 13, color: "#1A1A1A", fontWeight: 600 }}>{b.nombre}</div>
+              <div style={{ fontSize: 11, color: "#777" }}>{b.direccion}{b.grupo ? "  ·  " + b.grupo : ""}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const firebaseConfig = {
   apiKey: "AIzaSyB81kUEVRio_ryATzk8ilo1Z5Mwn6IfBbA",
@@ -2128,7 +2185,7 @@ function CotizacionGeneradorModule() {
 
       setEditingCotId(null);
       setView("lista");
-      setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 10, uti: 10 });
+      setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 0, uti: 0 });
       setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]);
     } catch (e) {
       console.error(e);
@@ -2193,8 +2250,8 @@ function CotizacionGeneradorModule() {
       edificio: c.edificio || "",
       direccion: c.direccion || "",
       titulo: c.titulo || "",
-      gg: c.gg || 10,
-      uti: c.uti || 10,
+      gg: c.gg == null ? 0 : c.gg,
+      uti: c.uti == null ? 0 : c.uti,
     });
     setPartidas(c.partidas && c.partidas.length > 0
       ? c.partidas.map((p) => ({ descripcion: p.descripcion || "", unidad: p.unidad || "m²", cantidad: p.cantidad || "", precioUnitario: p.precioUnitario || "" }))
@@ -2214,7 +2271,7 @@ function CotizacionGeneradorModule() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {view === "nueva" ? (
-            <button onClick={() => { setView("lista"); setEditingCotId(null); setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 10, uti: 10 }); setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]); }}
+            <button onClick={() => { setView("lista"); setEditingCotId(null); setForm({ fmGroup: "", citaServicio: "", edificio: "", direccion: "", titulo: "", gg: 0, uti: 0 }); setPartidas([{ descripcion: "", unidad: "m²", cantidad: "", precioUnitario: "" }]); }}
               style={{ background: TD.sidebar, color: TD.muted, border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
               ← Volver
             </button>
@@ -2349,11 +2406,24 @@ function CotizacionGeneradorModule() {
                       style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid " + TD.border, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}>
                       <option value="">Seleccionar FM Group...</option>
                       <option>Concepcion Norte</option>
-                      <option>Osorno</option>
+                      <option>Concepción Sur</option>
+                      <option>Talca</option>
+                      <option>Temuco</option>
+                      <option>Rancagua</option>
+                      <option>Santiago Sur</option>
                       <option>Santiago Oeste</option>
                       <option>Santiago Este</option>
+                      <option>Osorno</option>
                       <option>Puerto Montt</option>
                     </select>
+                  ) : f.key === "edificio" ? (
+                    <EdificioAutocomplete
+                      value={form.edificio}
+                      grupo={form.fmGroup}
+                      border={TD.border}
+                      onType={(v) => setForm({ ...form, edificio: v })}
+                      onPick={(b) => setForm({ ...form, edificio: b.nombre, direccion: b.direccion })}
+                    />
                   ) : (
                     <input value={form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                       placeholder={f.placeholder}
