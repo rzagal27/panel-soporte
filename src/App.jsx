@@ -3357,6 +3357,372 @@ function LicCompile({ C, d, onClose }) {
 }
 
 
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  MÓDULO AGENDA  —  reemplaza a "Tareas"                            ║
+// ║  Usa: db, SPECIALISTS, y firestore helpers ya importados          ║
+// ║  Colección Firestore: agenda_<specId>  (se crea sola)             ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+const AG_CATS = [
+  { id: "proyectos", name: "Proyectos", color: "#2564CF", bg: "#EEF3FB" },
+  { id: "opex", name: "Opex", color: "#1E8A52", bg: "#E6F4EC" },
+  { id: "capex", name: "Capex", color: "#6B2D8B", bg: "#F2E9F7" },
+  { id: "risk", name: "Risk", color: "#C23B3B", bg: "#FBE7E7" },
+  { id: "pagos", name: "Pagos", color: "#B07513", bg: "#FBF0D8" },
+  { id: "archivo", name: "Estándar de archivo", color: "#486581", bg: "#ECF0F4" },
+];
+const AG_CAT = (id) => AG_CATS.find((c) => c.id === id) || { name: id || "—", color: "#605E5C", bg: "#F3F2F1" };
+const AG_TIME_PRESETS = ["15 min", "30 min", "1 h", "2 h", "4 h", "Jornada completa"];
+
+const agPad = (n) => String(n).padStart(2, "0");
+const agYmd = (d) => d.getFullYear() + "-" + agPad(d.getMonth() + 1) + "-" + agPad(d.getDate());
+const agToday = () => agYmd(new Date());
+const agParse = (s) => { const p = s.split("-"); return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); };
+const agAddDays = (s, n) => { const d = agParse(s); d.setDate(d.getDate() + n); return agYmd(d); };
+const agCap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const agLong = (s) => agCap(agParse(s).toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" }));
+const agShort = (s) => agParse(s).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+// ══════════════════════════ MÓDULO ══════════════════════════════════
+function AgendaModule() {
+  const C = {
+    blue: "#2564CF", blueDark: "#1A52B3", blueLight: "#EEF3FB", border2: "#C7D8F5",
+    green: "#1E8A52", greenLight: "#E6F4EC", red: "#C23B3B", redLight: "#FBE7E7",
+    text: "#1F1F1F", muted: "#605E5C", light: "#A19F9D",
+    border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8", bg2: "#F5F6F8", bg3: "#E9ECF1",
+  };
+  const [spec, setSpec] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("dia");          // dia | cal | hist
+  const [day, setDay] = useState(agToday());
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const [showAdd, setShowAdd] = useState(false);
+  const [completing, setCompleting] = useState(null); // task object
+  const rolling = useRef({});
+
+  useEffect(() => {
+    if (!spec) return;
+    setLoading(true);
+    const unsub = onSnapshot(collection(db, "agenda_" + spec.id), (snap) => {
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [spec]);
+
+  // rollover: tareas abiertas de días pasados → hoy
+  useEffect(() => {
+    if (!spec) return;
+    const today = agToday();
+    items.forEach((t) => {
+      if (t.status === "open" && t.date && t.date < today && !rolling.current[t.id]) {
+        rolling.current[t.id] = true;
+        updateDoc(doc(db, "agenda_" + spec.id, t.id), { date: today, rollovers: (t.rollovers || 0) + 1 })
+          .finally(() => { delete rolling.current[t.id]; });
+      }
+    });
+  }, [items, spec]);
+
+  const addTask = async (data) => {
+    const today = agToday();
+    await addDoc(collection(db, "agenda_" + spec.id), {
+      title: data.title, category: data.category, notes: data.notes || "",
+      status: "open", date: day, createdDate: today, createdAt: new Date().toISOString(), rollovers: 0,
+    });
+    setShowAdd(false);
+  };
+  const completeTask = async (t, tiempo) => {
+    await updateDoc(doc(db, "agenda_" + spec.id, t.id), {
+      status: "done", tiempo: tiempo, completedDate: agToday(), completedAt: new Date().toISOString(),
+    });
+    setCompleting(null);
+  };
+  const reopenTask = async (t) => updateDoc(doc(db, "agenda_" + spec.id, t.id), { status: "open", date: agToday() });
+  const delTask = async (t) => { if (window.confirm("¿Eliminar esta tarea?")) await deleteDoc(doc(db, "agenda_" + spec.id, t.id)); };
+
+  const openByDay = (ymd) => items.filter((t) => t.status === "open" && t.date === ymd);
+
+  const shell = (children) => (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', system-ui, sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 26px 60px" }}>{children}</div>
+    </div>
+  );
+
+  // ----- selector especialista -----
+  if (!spec) {
+    return shell(
+      <div>
+        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>AGENDA · O&M SAS06</div>
+        <h2 style={{ margin: "0 0 4px", fontSize: 24 }}>Elige tu agenda</h2>
+        <p style={{ color: C.muted, fontSize: 13.5, marginTop: 0 }}>Cada especialista trabaja su día; el supervisor puede abrir cualquiera.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12, marginTop: 18 }}>
+          {SPECIALISTS.map((s) => (
+            <div key={s.id} onClick={() => { setSpec(s); setView("dia"); setDay(agToday()); }}
+              style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 18, cursor: "pointer", textAlign: "center" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: s.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, margin: "0 auto 10px" }}>{s.avatar}</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+              <div style={{ fontSize: 11.5, color: C.light }}>{s.role}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "'Segoe UI', sans-serif" }}>Cargando agenda…</div>;
+
+  const tabBtn = (id, label) => (
+    <button onClick={() => setView(id)} style={{ border: "1px solid " + (view === id ? C.blue : C.border), background: view === id ? C.blue : C.white, color: view === id ? "#fff" : C.muted, borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>
+  );
+
+  const header = (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+      <button onClick={() => setSpec(null)} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 12.5 }}>← Cambiar</button>
+      <div style={{ width: 30, height: 30, borderRadius: "50%", background: spec.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{spec.avatar}</div>
+      <b style={{ fontSize: 15 }}>{spec.name.split(" ")[0]}</b>
+      <div style={{ flex: 1 }} />
+      {tabBtn("dia", "📄 Día")}{tabBtn("cal", "📅 Calendario")}{tabBtn("hist", "✓ Historial")}
+    </div>
+  );
+
+  // ----- VISTA DÍA -----
+  if (view === "dia") {
+    const open = openByDay(day).sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+    const doneToday = items.filter((t) => t.status === "done" && t.completedDate === day);
+    const dd = agParse(day);
+    const isToday = day === agToday();
+    return shell(
+      <div>
+        {header}
+        {/* hoja del día */}
+        <div style={{ display: "flex", gap: 14, alignItems: "stretch", marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ width: 120, background: C.white, border: "1px solid " + C.border, borderRadius: 12, overflow: "hidden", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ background: C.red, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 0", letterSpacing: 1, textTransform: "uppercase" }}>{agCap(dd.toLocaleDateString("es-CL", { month: "long" }))}</div>
+            <div style={{ fontSize: 46, fontWeight: 800, lineHeight: 1.1, padding: "8px 0 2px" }}>{dd.getDate()}</div>
+            <div style={{ fontSize: 11.5, color: C.muted, paddingBottom: 8 }}>{agCap(dd.toLocaleDateString("es-CL", { weekday: "long" }))}</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 220, display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => setDay(agAddDays(day, -1))} style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 7, width: 32, height: 32, cursor: "pointer", fontSize: 15 }}>‹</button>
+              <button onClick={() => setDay(agAddDays(day, 1))} style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 7, width: 32, height: 32, cursor: "pointer", fontSize: 15 }}>›</button>
+              {!isToday ? <button onClick={() => setDay(agToday())} style={{ background: C.blueLight, border: "1px solid " + C.border2, color: C.blue, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>Hoy</button> : <span style={{ fontSize: 11.5, fontWeight: 700, color: C.green, background: C.greenLight, padding: "4px 10px", borderRadius: 999 }}>HOY</span>}
+            </div>
+            <div style={{ fontSize: 13, color: C.muted }}><b style={{ color: C.text }}>{open.length}</b> abierta{open.length !== 1 ? "s" : ""} · {doneToday.length} completada{doneToday.length !== 1 ? "s" : ""} este día</div>
+            <button onClick={() => setShowAdd(true)} style={{ alignSelf: "flex-start", background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Nueva tarea</button>
+          </div>
+        </div>
+
+        {open.length === 0 && doneToday.length === 0 ? (
+          <div style={{ background: C.white, border: "1px dashed " + C.border2, borderRadius: 10, padding: 36, textAlign: "center", color: C.muted }}>Día sin tareas. Agrega la primera con “+ Nueva tarea”.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {open.map((t) => (
+              <AgTaskRow key={t.id} C={C} t={t} onComplete={() => setCompleting(t)} onDelete={() => delTask(t)} />
+            ))}
+            {doneToday.length > 0 ? (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: C.light, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", margin: "6px 0" }}>Completadas hoy</div>
+                {doneToday.map((t) => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, background: C.bg2, border: "1px solid " + C.border, borderRadius: 8, padding: "9px 12px", marginBottom: 6, opacity: 0.85 }}>
+                    <span style={{ color: C.green, fontWeight: 700 }}>✓</span>
+                    <span style={{ fontSize: 13, textDecoration: "line-through", color: C.muted, flex: 1 }}>{t.title}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 999, background: AG_CAT(t.category).bg, color: AG_CAT(t.category).color }}>{AG_CAT(t.category).name}</span>
+                    <span style={{ fontSize: 11.5, color: C.muted }}>⏱ {t.tiempo}</span>
+                    <button onClick={() => reopenTask(t)} style={{ background: "none", border: "none", color: C.blue, fontSize: 11.5, cursor: "pointer" }}>reabrir</button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {showAdd ? <AgAddForm C={C} onClose={() => setShowAdd(false)} onSave={addTask} /> : null}
+        {completing ? <AgCompleteModal C={C} t={completing} onClose={() => setCompleting(null)} onConfirm={completeTask} /> : null}
+      </div>
+    );
+  }
+
+  // ----- VISTA CALENDARIO -----
+  if (view === "cal") {
+    return shell(
+      <div>
+        {header}
+        <AgCalendar C={C} y={calMonth.y} m={calMonth.m} items={items}
+          onNav={(delta) => { let m = calMonth.m + delta, y = calMonth.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } setCalMonth({ y, m }); }}
+          onPick={(ymd) => { setDay(ymd); setView("dia"); }} />
+      </div>
+    );
+  }
+
+  // ----- VISTA HISTORIAL -----
+  if (view === "hist") {
+    const done = items.filter((t) => t.status === "done").sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
+    return shell(
+      <div>
+        {header}
+        <h3 style={{ margin: "0 0 4px", fontSize: 17 }}>Historial por categoría</h3>
+        <p style={{ color: C.muted, fontSize: 12.5, marginTop: 0 }}>Tareas completadas, con su tiempo de resolución y fechas de creación y término.</p>
+        {done.length === 0 ? <div style={{ color: C.muted, padding: 24 }}>Aún no hay tareas completadas.</div> :
+          AG_CATS.map((cat) => {
+            const list = done.filter((t) => t.category === cat.id);
+            if (!list.length) return null;
+            return (
+              <div key={cat.id} style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: cat.color }} />
+                  <b style={{ fontSize: 13.5 }}>{cat.name}</b>
+                  <span style={{ fontSize: 11.5, color: C.light }}>{list.length}</span>
+                </div>
+                <div style={{ overflowX: "auto", border: "1px solid " + C.border, borderRadius: 9, background: C.white }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+                    <thead><tr>{["Tarea", "Creada", "Completada", "Tiempo"].map((h) => <th key={h} style={{ textAlign: "left", fontSize: 10.5, letterSpacing: 0.3, textTransform: "uppercase", color: C.light, fontWeight: 600, padding: "8px 12px", borderBottom: "1px solid " + C.border, background: C.bg2 }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {list.map((t) => (
+                        <tr key={t.id}>
+                          <td style={{ padding: "9px 12px", borderBottom: "1px solid " + C.border, fontSize: 13 }}>{t.title}</td>
+                          <td style={{ padding: "9px 12px", borderBottom: "1px solid " + C.border, fontSize: 12.5, color: C.muted }}>{t.createdDate ? agShort(t.createdDate) : "—"}</td>
+                          <td style={{ padding: "9px 12px", borderBottom: "1px solid " + C.border, fontSize: 12.5, color: C.muted }}>{t.completedDate ? agShort(t.completedDate) : "—"}</td>
+                          <td style={{ padding: "9px 12px", borderBottom: "1px solid " + C.border, fontSize: 12.5, fontWeight: 600 }}>⏱ {t.tiempo || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    );
+  }
+
+  return shell(<div>…</div>);
+}
+
+// ── fila de tarea (abierta) ──────────────────────────────────────────
+function AgTaskRow({ C, t, onComplete, onDelete }) {
+  const cat = AG_CAT(t.category);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 11, background: C.white, border: "1px solid " + C.border, borderLeft: "3px solid " + cat.color, borderRadius: 9, padding: "11px 13px" }}>
+      <button onClick={onComplete} title="Completar" style={{ width: 22, height: 22, borderRadius: "50%", border: "1.8px solid " + C.border2, background: C.white, cursor: "pointer", flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.title}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 999, background: cat.bg, color: cat.color }}>{cat.name}</span>
+          {t.createdDate ? <span style={{ fontSize: 11, color: C.light }}>creada {agShort(t.createdDate)}</span> : null}
+          {t.rollovers > 0 ? <span style={{ fontSize: 11, color: C.red }}>↻ {t.rollovers} día{t.rollovers !== 1 ? "s" : ""}</span> : null}
+          {t.notes ? <span style={{ fontSize: 11.5, color: C.muted }}>· {t.notes}</span> : null}
+        </div>
+      </div>
+      <button onClick={onDelete} style={{ background: "none", border: "none", color: C.light, fontSize: 16, cursor: "pointer" }}>×</button>
+    </div>
+  );
+}
+
+// ── formulario nueva tarea ───────────────────────────────────────────
+function AgAddForm({ C, onClose, onSave }) {
+  const [title, setTitle] = useState("");
+  const [cat, setCat] = useState("");
+  const [notes, setNotes] = useState("");
+  const inp = { width: "100%", background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 11px", fontSize: 13.5, color: C.text, fontFamily: "inherit", boxSizing: "border-box" };
+  const ok = title.trim() && cat;
+  return (
+    <AgOverlay onClose={onClose}>
+      <h3 style={{ margin: "0 0 14px", fontSize: 17 }}>Nueva tarea</h3>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 5 }}>¿Qué hay que hacer?</label>
+      <input autoFocus style={{ ...inp, marginBottom: 14 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Describe la tarea" />
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 7 }}>Categoría (obligatorio)</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 14 }}>
+        {AG_CATS.map((c) => {
+          const on = cat === c.id;
+          return <button key={c.id} onClick={() => setCat(c.id)} style={{ border: "1px solid " + (on ? c.color : C.border), background: on ? c.bg : C.white, color: on ? c.color : C.muted, borderRadius: 999, padding: "6px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{c.name}</button>;
+        })}
+      </div>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 5 }}>Nota (opcional)</label>
+      <input style={{ ...inp, marginBottom: 18 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Detalle breve" />
+      <div style={{ display: "flex", gap: 9, justifyContent: "flex-end" }}>
+        <button onClick={onClose} style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 15px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+        <button disabled={!ok} onClick={() => onSave({ title: title.trim(), category: cat, notes })} style={{ background: ok ? C.blue : C.bg3, color: ok ? "#fff" : C.light, border: "none", borderRadius: 7, padding: "9px 17px", fontWeight: 700, fontSize: 13, cursor: ok ? "pointer" : "not-allowed" }}>Agregar</button>
+      </div>
+    </AgOverlay>
+  );
+}
+
+// ── modal completar (tiempo obligatorio) ─────────────────────────────
+function AgCompleteModal({ C, t, onClose, onConfirm }) {
+  const [val, setVal] = useState("");
+  const inp = { width: "100%", background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 11px", fontSize: 13.5, color: C.text, fontFamily: "inherit", boxSizing: "border-box" };
+  const ok = val.trim();
+  return (
+    <AgOverlay onClose={onClose}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 17 }}>Completar tarea</h3>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>{t.title}</div>
+      <label style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, display: "block", marginBottom: 7 }}>Tiempo de resolución (obligatorio)</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 10 }}>
+        {AG_TIME_PRESETS.map((p) => <button key={p} onClick={() => setVal(p)} style={{ border: "1px solid " + (val === p ? C.blue : C.border), background: val === p ? C.blueLight : C.white, color: val === p ? C.blue : C.muted, borderRadius: 999, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{p}</button>)}
+      </div>
+      <input style={{ ...inp, marginBottom: 18 }} value={val} onChange={(e) => setVal(e.target.value)} placeholder="o escribe el tiempo (ej: 45 min, 3 h)" />
+      <div style={{ display: "flex", gap: 9, justifyContent: "flex-end" }}>
+        <button onClick={onClose} style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 15px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+        <button disabled={!ok} onClick={() => onConfirm(t, val.trim())} style={{ background: ok ? C.green : C.bg3, color: ok ? "#fff" : C.light, border: "none", borderRadius: 7, padding: "9px 17px", fontWeight: 700, fontSize: 13, cursor: ok ? "pointer" : "not-allowed" }}>✓ Completar</button>
+      </div>
+    </AgOverlay>
+  );
+}
+
+// ── overlay genérico ─────────────────────────────────────────────────
+function AgOverlay({ C, children, onClose }) {
+  const col = C || { white: "#fff" };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,24,33,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: col.white, borderRadius: 12, padding: 22, width: "100%", maxWidth: 440, boxShadow: "0 12px 40px rgba(0,0,0,0.25)", fontFamily: "'Segoe UI', sans-serif" }}>{children}</div>
+    </div>
+  );
+}
+
+// ── calendario mensual ───────────────────────────────────────────────
+function AgCalendar({ C, y, m, items, onNav, onPick }) {
+  const first = new Date(y, m, 1);
+  const offset = (first.getDay() + 6) % 7; // lunes primero
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < offset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const today = agToday();
+  const monthName = agCap(first.toLocaleDateString("es-CL", { month: "long", year: "numeric" }));
+  const dows = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
+  const countOpen = (ymd) => items.filter((t) => t.status === "open" && t.date === ymd).length;
+  return (
+    <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 12, padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <button onClick={() => onNav(-1)} style={{ background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, width: 32, height: 32, cursor: "pointer", fontSize: 15 }}>‹</button>
+        <b style={{ fontSize: 15 }}>{monthName}</b>
+        <button onClick={() => onNav(1)} style={{ background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, width: 32, height: 32, cursor: "pointer", fontSize: 15 }}>›</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+        {dows.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.light, textTransform: "uppercase", paddingBottom: 2 }}>{d}</div>)}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const ymd = y + "-" + agPad(m + 1) + "-" + agPad(d);
+          const n = countOpen(ymd);
+          const isToday = ymd === today;
+          return (
+            <button key={i} onClick={() => onPick(ymd)} style={{ position: "relative", aspectRatio: "1 / 1", border: "1px solid " + (isToday ? C.blue : C.border), borderRadius: 9, background: isToday ? C.blueLight : C.white, cursor: "pointer", display: "flex", alignItems: "flex-start", justifyContent: "flex-start", padding: 7, color: C.text }}>
+              <span style={{ fontSize: 13, fontWeight: isToday ? 800 : 500 }}>{d}</span>
+              {n > 0 ? <span style={{ position: "absolute", bottom: 6, right: 6, minWidth: 18, height: 18, borderRadius: 999, background: C.red, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{n}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>El número rojo indica tareas abiertas ese día. Toca un día para abrir su hoja.</div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [tasks, setTasks] = useState({});
   const [categories, setCategories] = useState({});
@@ -3539,7 +3905,7 @@ export default function App() {
         {["tareas", "cotizaciones", "presupuesto", "gas", "kilometraje", "eett", "licitaciones"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") { setSelectedSpec(null); } }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : mod === "presupuesto" ? "📊 Presupuesto" : mod === "eett" ? "📋 EETT" : "🧾 Licitaciones"}
+            {mod === "tareas" ? "📅 Agenda" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : mod === "presupuesto" ? "📊 Presupuesto" : mod === "eett" ? "📋 EETT" : "🧾 Licitaciones"}
           </button>
         ))}
       </div>
@@ -3556,6 +3922,8 @@ export default function App() {
         <EETTModule />
       ) : activeModule === "licitaciones" ? (
         <LicitacionesModule />
+      ) : activeModule === "tareas" ? (
+        <AgendaModule />
       ) : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
