@@ -2653,6 +2653,710 @@ function CotizacionGeneradorModule() {
   );
 }
 
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  MÓDULO LICITACIONES  —  pegar como un componente más             ║
+// ║  Usa: db, uploadToCloudinary, SPECIALISTS, GRUPOS_FM              ║
+// ║  Firestore helpers ya importados: collection, addDoc, onSnapshot, ║
+// ║  doc, updateDoc, deleteDoc                                         ║
+// ╚══════════════════════════════════════════════════════════════════╝
+
+const LIC_TIPOS = [
+  "Climatización / HVAC", "Calefont y Cocina", "Audio e Imagen",
+  "Calefacción y Gas", "Instalación Pluvial", "Sistemas contra Incendios",
+  "Fumigación", "Desmalezado y Matamalezas", "Pisos, Alfombras y Sanitización",
+  "Lavado de Campaniles y Exteriores",
+];
+
+const LIC_EETT = [
+  { id: "clima", name: "EETT Mantenimiento Climatización", d: "Split, VRF, extracción · plan preventivo" },
+  { id: "calefont", name: "EETT Calefont y Cocina", d: "Combustión a gas, seguridad SEC" },
+  { id: "audio", name: "EETT Audio e Imagen", d: "Amplificación, proyección, cableado" },
+];
+
+const LIC_STEPS = [
+  { n: 1, key: "tabulacion", title: "Tabulación de Ofertas + Comparativa", who: "you", required: true, canNA: false,
+    items: [{ k: "tab", t: "Formulario de Tabulación de Ofertas", d: "Firmado por quien preside y conduce" },
+            { k: "comp", t: "Comparativa de Precios", d: "Ranking por monto y oferta adjudicada" }] },
+  { n: 2, key: "cotizacion", title: "Planilla Cotización / Presupuestos", who: "you", required: true, canNA: false, special: "oferentes",
+    items: [{ k: "ofertas", t: "Ofertas / presupuestos presentados", d: "Un archivo por cada oferente" }] },
+  { n: 3, key: "mails", title: "Mails de Invitación y Aceptación", who: "mix", required: true, canNA: false, special: "mails" },
+  { n: 4, key: "eett", title: "Especificaciones Técnicas (EETT)", who: "pre", required: true, canNA: false, special: "eett" },
+  { n: 5, key: "nomina", title: "Nómina de Personal y Seguros", who: "you", required: false, canNA: true,
+    items: [{ k: "nom", t: "Nómina de personal (certificados)", d: "En blanco al inicio del contrato" },
+            { k: "seg", t: "Seguro por empleado y terceros", d: "Mutual de Seguridad o equivalente" }] },
+  { n: 6, key: "contrato", title: "Contrato", who: "mix", required: true, canNA: false, special: "contrato" },
+  { n: 7, key: "oc", title: "Orden de Compra", who: "you", required: false, canNA: true,
+    items: [{ k: "oc", t: "Orden de compra del período total", d: "Para el área se toma el año calendario" }] },
+  { n: 8, key: "notificaciones", title: "Notificaciones", who: "you", required: false, canNA: true,
+    items: [{ k: "notif", t: "Notificaciones por deficiencias", d: "Si corresponde durante la vigencia" }] },
+  { n: 9, key: "caratula", title: "Carátula / Check List", who: "gen", required: true, canNA: false, special: "caratula" },
+];
+
+const LIC_CONTRATO_FIELDS = [
+  { sec: "Contratista adjudicado" },
+  { k: "empresa", t: "Razón social del Contratista", ph: "Cerro Neuque SpA" },
+  { k: "rut_emp", t: "RUT empresa", ph: "76.XXX.XXX-X" },
+  { k: "rep", t: "Representante legal (nombre)", ph: "Nombre Apellido" },
+  { k: "rep_nac", t: "Nacionalidad", ph: "chileno" },
+  { k: "rep_civil", t: "Estado civil", ph: "casado" },
+  { k: "rep_prof", t: "Profesión", ph: "ingeniero" },
+  { k: "rep_rut", t: "Cédula de identidad", ph: "XX.XXX.XXX-X" },
+  { k: "rep_dom", t: "Domicilio", ph: "Calle 000, Comuna" },
+  { sec: "Representante de la Iglesia" },
+  { k: "igl_rep", t: "Representante (nombre)", ph: "Nombre Apellido" },
+  { k: "igl_civil", t: "Estado civil", ph: "casado" },
+  { k: "igl_prof", t: "Profesión", ph: "administrador" },
+  { k: "igl_rut", t: "Cédula de identidad", ph: "XX.XXX.XXX-X" },
+  { sec: "Objeto y vigencia" },
+  { k: "servicio", t: "Servicio de mantenimiento", ph: "(desde la carátula)" },
+  { k: "monto", t: "Precio único y total", ph: "(desde la adjudicación)", money: true },
+  { k: "meses", t: "Duración (meses)", ph: "12" },
+  { k: "c_ini", t: "Fecha de inicio", type: "date" },
+  { k: "c_fin", t: "Fecha de término", type: "date" },
+  { k: "f_firma", t: "Fecha de firma del contrato", type: "date" },
+];
+
+const licCLP = (n) => "$ " + (Number(String(n == null ? "" : n).replace(/[^\d]/g, "")) || 0).toLocaleString("es-CL");
+const licDate = (s) => { if (!s) return "—"; const p = s.split("-"); return p.length === 3 ? p[2] + "-" + p[1] + "-" + p[0] : s; };
+const licToday = () => new Date().toISOString().slice(0, 10);
+
+// ── estado de cada paso ──────────────────────────────────────────────
+function licStepStatus(step, lic) {
+  const st = (lic.steps && lic.steps[step.key]) || {};
+  if (st.na) return "na";
+  if (step.special === "mails") {
+    const r = st.files && st.files.respuestas && st.files.respuestas.length;
+    return (st.sent && r) ? "done" : (st.sent || r) ? "partial" : "todo";
+  }
+  if (step.special === "eett") return (lic.eett && lic.eett.length) ? "done" : "todo";
+  if (step.special === "caratula")
+    return LIC_STEPS.filter((s) => s.key !== "caratula" && s.required)
+      .every((s) => ["done", "na"].indexOf(licStepStatus(s, lic)) !== -1) ? "done" : "todo";
+  if (step.special === "contrato") {
+    const f = st.files && st.files.firmado && st.files.firmado.length;
+    return (st.done || f) ? "done" : "todo";
+  }
+  const items = step.items || [];
+  const ok = items.every((it) => st.files && st.files[it.k] && st.files[it.k].length);
+  if (ok) return "done";
+  const any = items.some((it) => st.files && st.files[it.k] && st.files[it.k].length);
+  return any ? "partial" : "todo";
+}
+function licCanAdvance(step, lic) {
+  const s = licStepStatus(step, lic);
+  return s === "done" || s === "na" || (!step.required && s === "todo");
+}
+
+// ── correos generados ────────────────────────────────────────────────
+function licBuildMails(lic) {
+  const c = lic.caratula || {}, p = lic.proceso || {};
+  const esp = SPECIALISTS.find((e) => e.id === lic.especialista) || {};
+  const win = (lic.oferentes || []).find((o) => o.win);
+  const invit =
+`Asunto: Invitación a cotizar – ${c.tipo || "[servicio]"} – ${c.fmGroup || ""}
+
+Estimados señores:
+
+La Iglesia de Jesucristo de los Santos de los Últimos Días los invita a presentar su oferta para el servicio de ${c.tipo || "[servicio]"} en ${c.grupo || "[edificio]"} (${c.fmGroup || ""}), Región SudOeste.
+
+Antecedentes del proceso:
+• Proyecto / Ubicación: ${c.grupo || "[edificio]"}
+• ID de Propiedad: ${p.idPropiedad || "[ID]"}
+• Fecha de apertura de ofertas: ${licDate(p.fechaApertura)} a las ${p.horaApertura || "[hora]"} hrs.
+• Documentos adjuntos: Especificaciones Técnicas (EETT) y anexos.
+
+Las ofertas deberán remitirse a más tardar en la fecha y hora indicada. Agradeceremos confirmar la recepción de esta invitación.
+
+Atentamente,
+${esp.name || "[especialista]"}
+Especialista de Soporte – SAS06`;
+  const acep =
+`Asunto: Adjudicación – ${c.tipo || "[servicio]"} – ${c.fmGroup || ""}
+
+Estimados ${win ? win.nombre : "[empresa adjudicada]"}:
+
+Nos complace informar que, concluido el proceso de evaluación, su empresa ha resultado ADJUDICADA para el servicio de ${c.tipo || "[servicio]"} en ${c.grupo || "[edificio]"} (${c.fmGroup || ""}), por un monto total de ${licCLP(win ? win.monto : 0)}.
+
+Nos pondremos en contacto para la suscripción del contrato. Para la firma se requerirá el Certificado de Antecedentes Laborales y Previsionales (F30) vigente.
+
+Atentamente,
+${esp.name || "[especialista]"}`;
+  const rech =
+`Asunto: Resultado del proceso – ${c.tipo || "[servicio]"} – ${c.fmGroup || ""}
+
+Estimados:
+
+Agradecemos su participación en el proceso de ${c.tipo || "[servicio]"} (${c.fmGroup || ""}). En esta oportunidad la oferta adjudicada correspondió a otro oferente. Valoramos su interés y esperamos contar con su participación en futuros procesos.
+
+Atentamente,
+${esp.name || "[especialista]"}`;
+  return { invit, acep, rech };
+}
+
+// ── uploader (Cloudinary) ────────────────────────────────────────────
+function LicUploader({ files, onChange, label, C }) {
+  const [busy, setBusy] = useState(false);
+  const ref = useRef(null);
+  const add = async (list) => {
+    if (!list || !list.length) return;
+    setBusy(true);
+    const out = (files || []).slice();
+    for (const f of list) {
+      try { const url = await uploadToCloudinary(f); out.push({ name: f.name, url, size: f.size }); }
+      catch (e) { alert("No se pudo subir: " + f.name); }
+    }
+    setBusy(false);
+    onChange(out);
+  };
+  return (
+    <div>
+      <div onClick={() => !busy && ref.current.click()}
+        style={{ border: "1.5px dashed " + C.border2, borderRadius: 8, padding: 14, textAlign: "center", color: busy ? C.muted : C.blue, fontSize: 12.5, background: C.bg2, cursor: busy ? "wait" : "pointer" }}>
+        <input ref={ref} type="file" multiple style={{ display: "none" }}
+          onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
+        {busy ? "Subiendo…" : "↑ " + (label || "Adjuntar archivo(s)")}
+      </div>
+      {files && files.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          {files.map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, background: C.white, border: "1px solid " + C.border, borderRadius: 7, padding: "7px 10px", fontSize: 12.5 }}>
+              <span style={{ width: 22, height: 22, borderRadius: 5, background: C.blueLight, color: C.blue, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                {(f.name.split(".").pop() || "").slice(0, 3).toUpperCase()}
+              </span>
+              <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500, color: C.text, textDecoration: "none" }}>{f.name}</a>
+              <button onClick={() => onChange(files.filter((_, x) => x !== i))} style={{ background: "none", border: "none", color: C.light, fontSize: 15, cursor: "pointer" }}>×</button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LicReqLine({ ok, title, sub, C }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 13px", border: "1px solid " + C.border, borderRadius: 8, background: C.bg2, marginBottom: 9 }}>
+      <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: ok ? C.green : C.bg3, color: ok ? "#fff" : C.light, border: ok ? "none" : "1px dashed " + C.border2 }}>{ok ? "✓" : ""}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{title}</div>
+        {sub ? <div style={{ fontSize: 11.5, color: C.muted }}>{sub}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════ MÓDULO ══════════════════════════════════
+function LicitacionesModule() {
+  const C = {
+    blue: "#2564CF", blueDark: "#1A52B3", blueLight: "#EEF3FB", border2: "#C7D8F5",
+    green: "#1E8A52", greenLight: "#E6F4EC", amber: "#B07513", amberLight: "#FBF0D8",
+    red: "#C23B3B", redLight: "#FBE7E7",
+    text: "#1F1F1F", muted: "#605E5C", light: "#A19F9D",
+    border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8", bg2: "#F5F6F8", bg3: "#E9ECF1",
+  };
+  const [lics, setLics] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [spec, setSpec] = useState(null);
+  const [view, setView] = useState("dash");       // dash | new | wizard
+  const [activeId, setActiveId] = useState(null);
+  const [startStep, setStartStep] = useState(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "licitaciones"), (snap) => {
+      const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setLics(arr); setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const isSuper = spec && spec.role.indexOf("Supervisor") !== -1;
+  const mine = spec ? (isSuper ? lics : lics.filter((l) => l.especialista === spec.id)) : [];
+
+  const createLic = async (data) => {
+    const ref = await addDoc(collection(db, "licitaciones"), data);
+    setActiveId(ref.id); setStartStep(null); setView("wizard");
+  };
+  const persist = async (lic) => {
+    await updateDoc(doc(db, "licitaciones", lic.id), {
+      caratula: lic.caratula || {}, proceso: lic.proceso || {}, oferentes: lic.oferentes || [],
+      eett: lic.eett || [], contrato: lic.contrato || {}, steps: lic.steps || {},
+    });
+  };
+  const removeLic = async (id) => { if (window.confirm("¿Eliminar esta licitación?")) await deleteDoc(doc(db, "licitaciones", id)); };
+
+  if (loading) return <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontFamily: "'Segoe UI', sans-serif" }}>Cargando licitaciones…</div>;
+
+  const shell = (children) => (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', system-ui, sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 1060, margin: "0 auto", padding: "26px 28px 60px" }}>{children}</div>
+    </div>
+  );
+
+  // ----- selector de especialista -----
+  if (!spec) {
+    return shell(
+      <div>
+        <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>MÓDULO DE LICITACIONES · O&M SAS06</div>
+        <h2 style={{ margin: "0 0 4px", fontSize: 24 }}>Elige tu espacio de trabajo</h2>
+        <p style={{ color: C.muted, fontSize: 13.5, marginTop: 0, maxWidth: 560 }}>Cada especialista gestiona sus propias licitaciones; el supervisor ve todas.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12, marginTop: 18 }}>
+          {SPECIALISTS.map((s) => {
+            const n = lics.filter((l) => l.especialista === s.id).length;
+            const sup = s.role.indexOf("Supervisor") !== -1;
+            return (
+              <div key={s.id} onClick={() => { setSpec(s); setView("dash"); }}
+                style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 18, cursor: "pointer", textAlign: "center" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.blue; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: s.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, margin: "0 auto 10px" }}>{s.avatar}</div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                <div style={{ fontSize: 11.5, color: C.light, marginBottom: 8 }}>{s.role}</div>
+                <div style={{ fontSize: 11.5, color: C.muted }}>{sup ? "Vista global" : n + " licitación" + (n === 1 ? "" : "es")}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ----- dashboard -----
+  if (view === "dash") {
+    const adj = mine.filter((l) => (l.oferentes || []).some((o) => o.win));
+    const montoTotal = adj.reduce((a, l) => { const w = (l.oferentes || []).find((o) => o.win); return a + (Number(String((w && w.monto) || 0).replace(/\D/g, "")) || 0); }, 0);
+    const completos = mine.filter((l) => LIC_STEPS.filter((s) => s.required).every((s) => ["done", "na"].indexOf(licStepStatus(s, l)) !== -1)).length;
+    const tile = (k, v, money) => (
+      <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px" }}>
+        <div style={{ fontSize: 11.5, color: C.muted, fontWeight: 600 }}>{k}</div>
+        <div style={{ fontSize: money ? 19 : 25, fontWeight: 800, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{v}</div>
+      </div>
+    );
+    return shell(
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <button onClick={() => setSpec(null)} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 12.5 }}>← Cambiar</button>
+          <div style={{ flex: 1 }} />
+          {!isSuper ? <button onClick={() => setView("new")} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Nueva licitación</button> : null}
+        </div>
+        <h2 style={{ margin: "0 0 2px", fontSize: 22 }}>{isSuper ? "Todas las licitaciones" : "Hola, " + spec.name.split(" ")[0]}</h2>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>{isSuper ? "Vista consolidada del equipo · SAS06" : "Tus licitaciones de mantenimiento"}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 24 }}>
+          {tile("Licitaciones", mine.length)}{tile("Adjudicadas", adj.length)}{tile("Legajos completos", completos)}{tile("Monto adjudicado", licCLP(montoTotal), true)}
+        </div>
+        {mine.length === 0 ? (
+          <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 40, textAlign: "center", color: C.muted }}>
+            Aún no hay licitaciones.{!isSuper ? <div style={{ marginTop: 10 }}><button onClick={() => setView("new")} style={{ background: C.blue, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontWeight: 700, cursor: "pointer" }}>+ Crear la primera</button></div> : null}
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto", border: "1px solid " + C.border, borderRadius: 10, background: C.white }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+              <thead><tr>
+                {["Servicio / Grupo", "Estado", "Adjudicado", "Monto", isSuper ? "Especialista" : "", ""].map((h, i) => (
+                  <th key={i} style={{ textAlign: "left", fontSize: 10.5, letterSpacing: 0.4, textTransform: "uppercase", color: C.light, fontWeight: 600, padding: "10px 13px", borderBottom: "1px solid " + C.border, background: C.bg2 }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {mine.map((l) => {
+                  const win = (l.oferentes || []).find((o) => o.win);
+                  const done = LIC_STEPS.filter((s) => s.required).filter((s) => ["done", "na"].indexOf(licStepStatus(s, l)) !== -1).length;
+                  const total = LIC_STEPS.filter((s) => s.required).length;
+                  const esp = SPECIALISTS.find((e) => e.id === l.especialista);
+                  let col = C.light, bg = C.bg3, label = "En proceso";
+                  if (win) { if (done === total) { col = C.green; bg = C.greenLight; label = "Legajo completo"; } else { col = C.amber; bg = C.amberLight; label = "En legajo " + done + "/" + total; } }
+                  return (
+                    <tr key={l.id}>
+                      <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border, fontSize: 13 }}>
+                        <div style={{ fontWeight: 600, cursor: "pointer" }} onClick={() => { setActiveId(l.id); setStartStep(null); setView("wizard"); }}>{(l.caratula && l.caratula.tipo) || "—"}</div>
+                        <div style={{ color: C.muted, fontSize: 11.5 }}>{(l.caratula && (l.caratula.grupo || l.caratula.fmGroup)) || "—"}</div>
+                      </td>
+                      <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: bg, color: col }}>{label}</span>
+                      </td>
+                      <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border, fontSize: 13 }}>{win ? <b>{win.nombre}</b> : <span style={{ color: C.light }}>Sin adjudicar</span>}</td>
+                      <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{win ? licCLP(win.monto) : "—"}</td>
+                      {isSuper ? <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border, fontSize: 12.5 }}>{esp ? esp.name.split(" ")[0] : ""}</td> : null}
+                      <td style={{ padding: "11px 13px", borderBottom: "1px solid " + C.border, textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button onClick={() => { setActiveId(l.id); setStartStep("contrato"); setView("wizard"); }} style={{ background: C.white, border: "1px solid " + C.border2, color: C.blue, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginRight: 6 }}>Contrato</button>
+                        <button onClick={() => { setActiveId(l.id); setStartStep(null); setView("wizard"); }} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Abrir</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ----- nueva licitación -----
+  if (view === "new") {
+    return <LicNew C={C} spec={spec} onCancel={() => setView("dash")} onCreate={createLic} />;
+  }
+
+  // ----- wizard -----
+  const active = lics.find((l) => l.id === activeId);
+  if (view === "wizard" && active)
+    return <LicWizard C={C} lic={active} spec={spec} isSuper={isSuper} startStep={startStep} persist={persist} onBack={() => setView("dash")} />;
+
+  return shell(<div>…</div>);
+}
+
+// ── nueva ────────────────────────────────────────────────────────────
+function LicNew({ C, spec, onCancel, onCreate }) {
+  const [f, setF] = useState({ grupo: "", tipo: LIC_TIPOS[0], fmGroup: GRUPOS_FM[0], fechaInicio: "", fechaFin: "", idPropiedad: "", fechaApertura: "", horaApertura: "10:00" });
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const ok = f.grupo.trim() && f.tipo && f.fmGroup;
+  const inp = { width: "100%", background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 11px", fontSize: 13.5, color: C.text, fontFamily: "inherit", boxSizing: "border-box" };
+  const lab = { display: "block", fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 5 };
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 620, margin: "0 auto", padding: "26px 28px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 21 }}>Nueva licitación</h2><div style={{ flex: 1 }} />
+          <button onClick={onCancel} style={{ background: "none", border: "1px solid " + C.border, borderRadius: 7, padding: "7px 13px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+        </div>
+        <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 18 }}>
+          <div style={{ marginBottom: 12 }}><label style={lab}>Grupo / Edificio</label><input style={inp} value={f.grupo} onChange={(e) => set("grupo", e.target.value)} placeholder="Ej: Concepción Mission Assembly Office" /></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ marginBottom: 12 }}><label style={lab}>Tipo de servicio</label><select style={inp} value={f.tipo} onChange={(e) => set("tipo", e.target.value)}>{LIC_TIPOS.map((t) => <option key={t}>{t}</option>)}</select></div>
+            <div style={{ marginBottom: 12 }}><label style={lab}>FM Group</label><select style={inp} value={f.fmGroup} onChange={(e) => set("fmGroup", e.target.value)}>{GRUPOS_FM.map((t) => <option key={t}>{t}</option>)}</select></div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ marginBottom: 12 }}><label style={lab}>Fecha inicio contrato</label><input type="date" style={inp} value={f.fechaInicio} onChange={(e) => set("fechaInicio", e.target.value)} /></div>
+            <div style={{ marginBottom: 12 }}><label style={lab}>Fecha fin contrato</label><input type="date" style={inp} value={f.fechaFin} onChange={(e) => set("fechaFin", e.target.value)} /></div>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", margin: "6px 0 10px" }}>Datos del proceso (para los correos)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div style={{ marginBottom: 12 }}><label style={lab}>ID de Propiedad</label><input style={inp} value={f.idPropiedad} onChange={(e) => set("idPropiedad", e.target.value)} placeholder="5224411" /></div>
+            <div style={{ marginBottom: 12 }}><label style={lab}>Fecha apertura</label><input type="date" style={inp} value={f.fechaApertura} onChange={(e) => set("fechaApertura", e.target.value)} /></div>
+            <div style={{ marginBottom: 12 }}><label style={lab}>Hora apertura</label><input style={inp} value={f.horaApertura} onChange={(e) => set("horaApertura", e.target.value)} placeholder="10:00" /></div>
+          </div>
+          <button disabled={!ok} onClick={() => onCreate({
+            especialista: spec.id, createdAt: new Date().toISOString(),
+            caratula: { grupo: f.grupo, tipo: f.tipo, region: "Región SudOeste", fmGroup: f.fmGroup, fechaInicio: f.fechaInicio, fechaFin: f.fechaFin, monto: "" },
+            proceso: { idPropiedad: f.idPropiedad, fechaApertura: f.fechaApertura, horaApertura: f.horaApertura },
+            oferentes: [], eett: [], contrato: {}, steps: {},
+          })} style={{ width: "100%", background: ok ? C.blue : C.bg3, color: ok ? "#fff" : C.light, border: "none", borderRadius: 8, padding: 12, fontWeight: 700, fontSize: 14, cursor: ok ? "pointer" : "not-allowed", marginTop: 6 }}>Crear y empezar el legajo →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── wizard ───────────────────────────────────────────────────────────
+function LicWizard({ C, lic, spec, isSuper, startStep, persist, onBack }) {
+  const [d, setD] = useState(lic);
+  const [idx, setIdx] = useState(() => { const i = LIC_STEPS.findIndex((s) => s.key === startStep); return i >= 0 ? i : 0; });
+  const [compiling, setCompiling] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setD(lic); }, [lic.id]);
+
+  const step = LIC_STEPS[idx];
+  const steps = d.steps || {};
+  const setStep = (key, val) => setD((p) => ({ ...p, steps: { ...(p.steps || {}), [key]: val } }));
+  const patch = (obj) => setD((p) => ({ ...p, ...obj }));
+  const save = async () => { await persist(d); setSaved(true); setTimeout(() => setSaved(false), 1500); };
+  const goto = async (i) => { await persist(d); setIdx(i); };
+
+  const inp = { width: "100%", background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 11px", fontSize: 13.5, color: C.text, fontFamily: "inherit", boxSizing: "border-box" };
+  const lab = { display: "block", fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 5 };
+
+  if (compiling) return <LicCompile C={C} d={d} onClose={() => setCompiling(false)} />;
+
+  // cuerpo según paso
+  let body = null;
+  const st = steps[step.key] || {};
+  if (step.special === "oferentes") {
+    const ofs = d.oferentes || [];
+    const setOfs = (next) => patch({ oferentes: next });
+    const files = (st.files && st.files.ofertas) || [];
+    body = (
+      <div>
+        <p style={{ fontSize: 12, color: C.muted, marginTop: 0 }}>Registra los oferentes y su monto. Marca ★ al adjudicado (normalmente la oferta válida más baja). Alimenta comparativa, correos y contrato.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
+          {ofs.map((o) => (
+            <div key={o.id} style={{ display: "grid", gridTemplateColumns: "1fr 140px 44px 32px", gap: 7, alignItems: "center" }}>
+              <input style={inp} value={o.nombre} placeholder="Razón social" onChange={(e) => setOfs(ofs.map((x) => x.id === o.id ? { ...x, nombre: e.target.value } : x))} />
+              <input style={{ ...inp, textAlign: "right" }} value={o.monto ? licCLP(o.monto) : ""} placeholder="$" onChange={(e) => setOfs(ofs.map((x) => x.id === o.id ? { ...x, monto: e.target.value.replace(/\D/g, "") } : x))} />
+              <button onClick={() => setOfs(ofs.map((x) => ({ ...x, win: x.id === o.id ? !x.win : false })))} title="Adjudicado" style={{ height: 36, borderRadius: 7, border: "1px solid " + (o.win ? C.green : C.border2), background: o.win ? C.green : C.white, color: o.win ? "#fff" : C.muted, cursor: "pointer", fontWeight: 700 }}>{o.win ? "★" : "☆"}</button>
+              <button onClick={() => setOfs(ofs.filter((x) => x.id !== o.id))} style={{ background: "none", border: "none", color: C.light, fontSize: 16, cursor: "pointer" }}>×</button>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setOfs([...ofs, { id: "o" + Date.now(), nombre: "", monto: "", win: false }])} style={{ background: C.white, border: "1px solid " + C.border2, color: C.blue, borderRadius: 7, padding: "7px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Agregar oferente</button>
+        <div style={{ height: 16 }} />
+        <LicReqLine C={C} ok={files.length > 0} title="Ofertas / presupuestos presentados" sub="Un archivo por cada oferente invitado" />
+        <LicUploader C={C} files={files} label="Subir ofertas presentadas" onChange={(nf) => setStep(step.key, { ...st, files: { ...(st.files || {}), ofertas: nf } })} />
+      </div>
+    );
+  } else if (step.special === "mails") {
+    body = <LicMails C={C} d={d} st={st} setStep={(v) => setStep(step.key, v)} />;
+  } else if (step.special === "eett") {
+    const sel = d.eett || [];
+    body = (
+      <div>
+        <p style={{ fontSize: 12, color: C.muted, marginTop: 0 }}>EETT precargadas. Selecciona las que aplican a este servicio; quedan adjuntas al legajo.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {LIC_EETT.map((e) => {
+            const on = sel.indexOf(e.id) !== -1;
+            return (
+              <button key={e.id} onClick={() => patch({ eett: on ? sel.filter((x) => x !== e.id) : [...sel, e.id] })}
+                style={{ display: "flex", alignItems: "center", gap: 11, border: "1px solid " + (on ? C.blue : C.border), borderRadius: 8, padding: "11px 13px", background: on ? C.blueLight : C.bg2, textAlign: "left", width: "100%", cursor: "pointer" }}>
+                <span style={{ width: 21, height: 21, borderRadius: 6, border: "1.5px solid " + (on ? C.blue : C.border2), background: on ? C.blue : "transparent", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12, flexShrink: 0 }}>{on ? "✓" : ""}</span>
+                <span><b style={{ fontSize: 13 }}>{e.name}</b><span style={{ display: "block", color: C.muted, fontSize: 11.5 }}>{e.d}</span></span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  } else if (step.special === "contrato") {
+    const c = { ...(d.contrato || {}) };
+    const win = (d.oferentes || []).find((o) => o.win);
+    if (!c.servicio && d.caratula && d.caratula.tipo) c.servicio = d.caratula.tipo;
+    if (!c.monto && win) c.monto = win.monto;
+    const setC = (k, v) => patch({ contrato: { ...c, [k]: v } });
+    const files = (st.files && st.files.firmado) || [];
+    body = (
+      <div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "11px 13px", borderRadius: 8, background: C.amberLight, color: C.amber, fontSize: 12.5, marginBottom: 14 }}>
+          <span>◆</span><div>Tú aportas el <b>formato base</b>. El módulo solo pide los datos que cambian según el adjudicado.</div>
+        </div>
+        {LIC_CONTRATO_FIELDS.map((f, i) => f.sec
+          ? <div key={i} style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", margin: "15px 0 9px" }}>{f.sec}</div>
+          : <div key={f.k} style={{ marginBottom: 11 }}>
+              <label style={lab}>{f.t}</label>
+              <input type={f.type || "text"} style={inp} placeholder={f.ph}
+                value={f.money && c.monto ? licCLP(c.monto) : (c[f.k] || "")}
+                onChange={(e) => setC(f.k, f.money ? e.target.value.replace(/\D/g, "") : e.target.value)} />
+            </div>
+        )}
+        <div style={{ height: 8 }} />
+        <LicReqLine C={C} ok={files.length > 0} title="Contrato firmado por ambas partes" sub="Sube el documento final una vez suscrito" />
+        <LicUploader C={C} files={files} label="Subir contrato firmado" onChange={(nf) => setStep(step.key, { ...st, files: { ...(st.files || {}), firmado: nf } })} />
+      </div>
+    );
+  } else if (step.special === "caratula") {
+    body = <LicCaratula C={C} d={d} />;
+  } else {
+    const setNA = (v) => setStep(step.key, { ...st, na: v, naReason: st.naReason || "" });
+    body = (
+      <div>
+        {step.items.map((it) => {
+          const files = (st.files && st.files[it.k]) || [];
+          return (
+            <div key={it.k} style={{ marginBottom: 16, opacity: st.na ? 0.5 : 1, pointerEvents: st.na ? "none" : "auto" }}>
+              <LicReqLine C={C} ok={files.length > 0} title={it.t} sub={it.d} />
+              <LicUploader C={C} files={files} label={"Subir " + it.t.toLowerCase()} onChange={(nf) => setStep(step.key, { ...st, na: false, files: { ...(st.files || {}), [it.k]: nf } })} />
+            </div>
+          );
+        })}
+        {step.canNA ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 13px", border: "1px solid " + C.border, borderRadius: 8, background: C.bg2, marginTop: 4 }}>
+            <div><b style={{ fontSize: 13 }}>Marcar como No Aplica (N/A)</b><div style={{ fontSize: 11.5, color: C.muted }}>Cuando el punto no corresponde a este proceso.</div></div>
+            <input type="checkbox" checked={!!st.na} onChange={(e) => setNA(e.target.checked)} style={{ width: 20, height: 20 }} />
+          </div>
+        ) : null}
+        {st.na ? <div style={{ marginTop: 10 }}><label style={lab}>Motivo del N/A</label><input style={inp} value={st.naReason || ""} onChange={(e) => setStep(step.key, { ...st, naReason: e.target.value })} placeholder="Ej: se adjunta a la firma del contrato" /></div> : null}
+      </div>
+    );
+  }
+
+  const adv = licCanAdvance(step, d);
+  const tag = (txt, bg, col) => <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase", padding: "2px 7px", borderRadius: 5, background: bg, color: col }}>{txt}</span>;
+  const whoTag = step.special === "mails"
+    ? <span style={{ display: "inline-flex", gap: 6 }}>{tag("Invitación generada", C.greenLight, C.green)}{tag("Respuestas: las sube el especialista", C.blueLight, C.blue)}</span>
+    : step.who === "you" ? tag("Carga el especialista", C.blueLight, C.blue)
+    : step.who === "gen" ? tag("Generado por el módulo", C.greenLight, C.green)
+    : step.who === "mix" ? tag("Datos + adjunto", C.blueLight, C.blue)
+    : tag("Precargado · seleccionar", C.amberLight, C.amber);
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "22px 28px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+          <button onClick={async () => { await persist(d); onBack(); }} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 12.5 }}>← {isSuper ? "Todas" : "Mis licitaciones"}</button>
+          <div style={{ flex: 1 }} />
+          {saved ? <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>✓ Guardado</span> : null}
+          <button onClick={save} style={{ background: C.white, border: "1px solid " + C.border2, color: C.blue, borderRadius: 8, padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Guardar</button>
+          <button onClick={async () => { await persist(d); setCompiling(true); }} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Compilar legajo</button>
+        </div>
+        <h2 style={{ margin: "0 0 14px", fontSize: 18 }}>{(d.caratula && d.caratula.tipo) || "Licitación"} <span style={{ color: C.muted, fontWeight: 500, fontSize: 14 }}>· {d.caratula && d.caratula.fmGroup}</span></h2>
+
+        <div style={{ display: "grid", gridTemplateColumns: "248px 1fr", gap: 18, alignItems: "start" }}>
+          {/* rail */}
+          <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 9 }}>
+            {LIC_STEPS.map((s, i) => {
+              const stt = licStepStatus(s, d);
+              const on = i === idx;
+              const numBg = stt === "done" ? C.green : stt === "na" ? C.bg3 : on ? C.blue : "transparent";
+              const numCol = stt === "done" || (on && stt !== "na") ? "#fff" : C.muted;
+              return (
+                <button key={s.key} onClick={() => goto(i)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 9px", borderRadius: 8, border: "none", background: on ? C.blueLight : "transparent", width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 2 }}>
+                  <span style={{ width: 25, height: 25, borderRadius: "50%", border: "1.5px solid " + (stt === "done" ? C.green : stt === "na" ? C.border2 : on ? C.blue : C.border2), background: numBg, color: numCol, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{stt === "done" ? "✓" : stt === "na" ? "–" : s.n}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, minWidth: 0 }}>{s.title}{!s.required ? <span style={{ fontSize: 10, color: C.light, fontWeight: 400 }}> · opc</span> : null}</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* panel */}
+          <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ padding: "16px 18px", borderBottom: "1px solid " + C.border, display: "flex", gap: 13, alignItems: "flex-start" }}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: C.blueLight, color: C.blue, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0 }}>{step.n}</span>
+              <div><h3 style={{ margin: 0, fontSize: 16 }}>{step.title}</h3><div style={{ marginTop: 5 }}>{whoTag}</div></div>
+            </div>
+            <div style={{ padding: 18 }}>{body}</div>
+            <div style={{ padding: "13px 18px", borderTop: "1px solid " + C.border, display: "flex", alignItems: "center", gap: 10, background: C.bg2 }}>
+              <button disabled={idx === 0} onClick={() => goto(idx - 1)} style={{ background: C.white, border: "1px solid " + C.border2, borderRadius: 7, padding: "8px 13px", fontSize: 13, fontWeight: 600, color: idx === 0 ? C.light : C.text, cursor: idx === 0 ? "not-allowed" : "pointer" }}>← Anterior</button>
+              <div style={{ flex: 1 }} />
+              <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: adv ? C.greenLight : C.redLight, color: adv ? C.green : C.red }}>{adv ? "Puedes avanzar" : "Completa este paso"}</span>
+              {idx < LIC_STEPS.length - 1
+                ? <button disabled={!adv} onClick={() => goto(idx + 1)} style={{ background: adv ? C.blue : C.bg3, border: "none", color: adv ? "#fff" : C.light, borderRadius: 7, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: adv ? "pointer" : "not-allowed" }}>Siguiente →</button>
+                : <button onClick={async () => { await persist(d); setCompiling(true); }} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 7, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Revisar y compilar →</button>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── paso correos ─────────────────────────────────────────────────────
+function LicMails({ C, d, st, setStep }) {
+  const [tab, setTab] = useState("invit");
+  const [copied, setCopied] = useState(false);
+  const base = licBuildMails(d);
+  const texts = { ...base, ...(st.texts || {}) };
+  const resp = (st.files && st.files.respuestas) || [];
+  const names = { invit: "Invitación a oferentes", acep: "Aviso de adjudicación", rech: "Aviso de no adjudicación" };
+  const inp = { width: "100%", background: C.bg2, border: "1px solid " + C.border, borderRadius: 7, padding: "9px 11px", fontSize: 13, color: C.text, fontFamily: "inherit", boxSizing: "border-box", lineHeight: 1.55, resize: "vertical" };
+  const copy = () => { try { navigator.clipboard.writeText(texts[tab]).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); } catch (e) {} };
+  return (
+    <div>
+      <LicReqLine C={C} ok={!!st.sent} title="Mails de invitación a todos los oferentes" sub="Generados por el módulo · los envías tú" />
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+        {Object.keys(names).map((k) => (
+          <button key={k} onClick={() => setTab(k)} style={{ border: "1px solid " + (tab === k ? C.blue : C.border), background: tab === k ? C.blue : C.bg2, color: tab === k ? "#fff" : C.muted, borderRadius: 7, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{names[k]}</button>
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+        <span style={{ fontSize: 11, color: C.light, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>{names[tab]}</span>
+        <span style={{ display: "flex", gap: 7, alignItems: "center" }}>
+          {copied ? <span style={{ fontSize: 11.5, color: C.green, fontWeight: 600 }}>✓ Copiado</span> : null}
+          <button onClick={() => setStep({ ...st, texts: { ...texts, [tab]: base[tab] } })} style={{ background: C.white, border: "1px solid " + C.border2, borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: C.text }}>↻ Regenerar</button>
+          <button onClick={copy} style={{ background: C.white, border: "1px solid " + C.border2, borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: C.text }}>Copiar</button>
+        </span>
+      </div>
+      <textarea rows={13} style={inp} value={texts[tab]} onChange={(e) => setStep({ ...st, texts: { ...texts, [tab]: e.target.value } })} />
+      <button onClick={() => setStep({ ...st, sent: true, texts })} style={{ background: C.blue, border: "none", color: "#fff", borderRadius: 7, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>{st.sent ? "✓ Envíos guardados" : "Guardar y marcar como enviados"}</button>
+      <div style={{ height: 20 }} />
+      <LicReqLine C={C} ok={resp.length > 0} title="Mail de aceptación o rechazo de los oferentes invitados" sub="Son las respuestas que llegan por correo · adjúntalas aquí" />
+      <LicUploader C={C} files={resp} label="Adjuntar respuestas de los oferentes" onChange={(nf) => setStep({ ...st, files: { ...(st.files || {}), respuestas: nf } })} />
+    </div>
+  );
+}
+
+// ── carátula ─────────────────────────────────────────────────────────
+function LicCaratula({ C, d }) {
+  const c = d.caratula || {};
+  const win = (d.oferentes || []).find((o) => o.win);
+  const pts = [
+    ["Tabulación de Ofertas / Comparativa", "tabulacion"], ["Planilla de Cotización / Presupuestos", "cotizacion"],
+    ["Mails de invitación y aceptación", "mails"], ["Especificaciones Técnicas", "eett"],
+    ["Nómina de personal y seguros", "nomina"], ["Contrato", "contrato"],
+    ["Orden de Compra", "oc"], ["Notificaciones", "notificaciones"],
+  ];
+  const mark = (key) => { const s = LIC_STEPS.find((x) => x.key === key); const stt = licStepStatus(s, d); return stt === "na" ? <span style={{ color: C.light, fontWeight: 700, fontSize: 12 }}>N/A</span> : <span style={{ color: stt === "done" ? C.green : C.light, fontWeight: 700, fontSize: 12 }}>{stt === "done" ? "SI" : "—"}</span>; };
+  const td = { border: "1px solid " + C.border, padding: "7px 10px", fontSize: 12 };
+  return (
+    <div>
+      <p style={{ fontSize: 12, color: C.muted, marginTop: 0 }}>La carátula se arma sola y marca SI / N/A según cada punto del legajo:</p>
+      <div style={{ border: "1px solid " + C.border2, borderRadius: 8, overflow: "hidden" }}>
+        <div style={{ background: C.blue, color: "#fff", fontWeight: 700, fontSize: 15, padding: "11px 14px" }}>Operaciones &amp; Mantenimiento</div>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}><tbody>
+          {[["Grupo", c.grupo], ["Tipo de Servicio", c.tipo], ["Región", c.region || "Región SudOeste"], ["FM Group", c.fmGroup], ["Fecha inicio de contrato", licDate(c.fechaInicio)], ["Fecha fin de contrato", licDate(c.fechaFin)], ["Monto total", licCLP(c.monto || (win ? win.monto : 0))]].map((r, i) => (
+            <tr key={i}><td style={{ ...td, background: C.bg2, fontWeight: 600, color: C.muted, width: "40%" }}>{r[0]}</td><td style={td}>{r[1] || "—"}</td></tr>
+          ))}
+        </tbody></table>
+        <div style={{ background: C.amberLight, color: C.amber, fontWeight: 700, textAlign: "center", padding: 7, fontSize: 11.5, letterSpacing: 0.5, textTransform: "uppercase" }}>Check List de Documentos</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+          {pts.map((p, i) => (
+            <div key={i} style={{ border: "1px solid " + C.border, padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <b style={{ fontSize: 11.5, fontWeight: 600 }}>{i + 1}. {p[0]}</b>{mark(p[1])}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── compilar ─────────────────────────────────────────────────────────
+function LicCompile({ C, d, onClose }) {
+  const reqMissing = LIC_STEPS.filter((s) => s.required && ["done", "na"].indexOf(licStepStatus(s, d)) === -1);
+  const complete = reqMissing.length === 0;
+  const win = (d.oferentes || []).find((o) => o.win);
+  const allFiles = [];
+  LIC_STEPS.forEach((s) => { const st = (d.steps || {})[s.key] || {}; if (st.files) Object.keys(st.files).forEach((k) => (st.files[k] || []).forEach((f) => allFiles.push({ step: s.n, name: f.name, url: f.url }))); });
+  const descFor = (s) => {
+    const st = (d.steps || {})[s.key] || {};
+    if (st.na) return "N/A — " + (st.naReason || "no aplica");
+    if (s.special === "mails") { const r = ((st.files && st.files.respuestas) || []).length; return (st.sent ? "invitación generada" : "invitación pendiente") + " · " + (r ? r + " respuesta(s)" : "respuestas pendientes"); }
+    if (s.special === "eett") return (d.eett || []).length ? (d.eett.map((id) => { const e = LIC_EETT.find((x) => x.id === id); return e ? e.name.replace("EETT ", "") : id; }).join(", ")) : "pendiente";
+    if (s.special === "caratula") return complete ? "generada automáticamente" : "se genera al completar el legajo";
+    if (s.special === "contrato") { const f = ((st.files && st.files.firmado) || []).length; return f ? "datos + contrato firmado adjunto" : (st.done ? "datos completos" : "pendiente"); }
+    const items = s.items || []; const n = items.reduce((a, it) => a + (((st.files && st.files[it.k]) || []).length), 0); return n ? n + " archivo(s) adjunto(s)" : "pendiente";
+  };
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "26px 28px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <div><h2 style={{ margin: 0, fontSize: 19 }}>Compilar legajo</h2><div style={{ color: C.muted, fontSize: 13 }}>{d.caratula && d.caratula.tipo} · {d.caratula && d.caratula.fmGroup}</div></div>
+          <div style={{ flex: 1 }} /><button onClick={onClose} style={{ background: "none", border: "1px solid " + C.border, borderRadius: 7, padding: "8px 14px", cursor: "pointer", fontSize: 13 }}>← Volver</button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 15px", borderRadius: 8, fontSize: 13, marginBottom: 16, background: complete ? C.greenLight : C.amberLight, color: complete ? C.green : C.amber }}>
+          <span>{complete ? "✓" : "!"}</span>
+          <div>{complete ? <span><b>Legajo completo.</b> Todos los puntos obligatorios están resueltos.</span> : <span><b>Faltan {reqMissing.length} punto(s):</b> {reqMissing.map((s) => s.n + ". " + s.title.split(" ").slice(0, 2).join(" ")).join(" · ")}.</span>}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid " + C.border, borderRadius: 8, padding: "11px 13px", background: C.white }}>
+            <span style={{ width: 26, height: 26, borderRadius: 7, background: C.green, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>★</span>
+            <div style={{ flex: 1 }}><b style={{ fontSize: 13 }}>Portada — Carátula / Check List</b><div style={{ fontSize: 11.5, color: C.muted }}>Encabezado con datos del grupo y marcas SI/N/A</div></div>
+          </div>
+          {LIC_STEPS.filter((s) => s.key !== "caratula").map((s) => {
+            const stt = licStepStatus(s, d);
+            const numBg = stt === "done" ? C.green : stt === "na" ? C.bg3 : C.bg3;
+            return (
+              <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 12, border: "1px solid " + C.border, borderRadius: 8, padding: "11px 13px", background: C.white }}>
+                <span style={{ width: 26, height: 26, borderRadius: 7, background: numBg, color: stt === "done" ? "#fff" : C.muted, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{s.n}</span>
+                <div style={{ flex: 1, minWidth: 0 }}><b style={{ fontSize: 13 }}>{s.title}</b><div style={{ fontSize: 11.5, color: C.muted }}>{descFor(s)}</div></div>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 999, background: stt === "done" ? C.greenLight : stt === "na" ? C.bg3 : s.required ? C.redLight : C.amberLight, color: stt === "done" ? C.green : stt === "na" ? C.muted : s.required ? C.red : C.amber }}>{stt === "done" ? "listo" : stt === "na" ? "N/A" : s.required ? "falta" : "opcional"}</span>
+              </div>
+            );
+          })}
+        </div>
+        {allFiles.length > 0 ? (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 }}>Documentos del legajo ({allFiles.length})</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {allFiles.map((f, i) => <a key={i} href={f.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.blue, background: C.white, border: "1px solid " + C.border, borderRadius: 7, padding: "6px 10px", textDecoration: "none" }}>{f.step}. {f.name}</a>)}
+            </div>
+          </div>
+        ) : null}
+        <button disabled={!complete} onClick={() => window.print()} style={{ marginTop: 18, width: "100%", background: complete ? C.blue : C.bg3, color: complete ? "#fff" : C.light, border: "none", borderRadius: 8, padding: 12, fontWeight: 700, fontSize: 14, cursor: complete ? "pointer" : "not-allowed" }}>{complete ? "Generar carátula / imprimir legajo" : "Completa los pasos obligatorios"}</button>
+        <div style={{ fontSize: 11.5, color: C.muted, background: C.bg2, border: "1px solid " + C.border, borderLeft: "3px solid " + C.blue, borderRadius: 6, padding: "10px 13px", marginTop: 12 }}>
+          Los documentos quedan guardados en Cloudinary y accesibles desde aquí. Para unir todo en un solo PDF automático, se puede agregar <b>pdf-lib</b> como mejora posterior.
+        </div>
+        {win ? <p style={{ textAlign: "center", color: C.muted, fontSize: 12.5, marginTop: 14 }}>Adjudicado: <b>{win.nombre}</b> · {licCLP(win.monto)}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+
 export default function App() {
   const [tasks, setTasks] = useState({});
   const [categories, setCategories] = useState({});
@@ -2832,10 +3536,10 @@ export default function App() {
           <span style={{ fontWeight: 600, fontSize: 15, color: "white" }}>Panel de Soporte</span>
         </div>
         <div style={{ flex: 1 }} />
-        {["tareas", "cotizaciones", "presupuesto", "gas", "kilometraje", "eett"].map((mod) => (
+        {["tareas", "cotizaciones", "presupuesto", "gas", "kilometraje", "eett", "licitaciones"].map((mod) => (
           <button key={mod} onClick={() => { setActiveModule(mod); if (mod !== "tareas") { setSelectedSpec(null); } }}
             style={{ padding: "5px 14px", borderRadius: 4, border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit", background: activeModule === mod ? "rgba(255,255,255,0.25)" : "transparent", color: "white", fontWeight: activeModule === mod ? 700 : 400, transition: "all 0.1s", opacity: activeModule === mod ? 1 : 0.8 }}>
-            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : mod === "presupuesto" ? "📊 Presupuesto" : "📋 EETT"}
+            {mod === "tareas" ? "✔ Tareas" : mod === "cotizaciones" ? "📄 Cotizaciones" : mod === "gas" ? "🔥 Gas" : mod === "kilometraje" ? "🚗 Kilometraje" : mod === "presupuesto" ? "📊 Presupuesto" : mod === "eett" ? "📋 EETT" : "🧾 Licitaciones"}
           </button>
         ))}
       </div>
@@ -2850,6 +3554,8 @@ export default function App() {
         <CotizacionGeneradorModule />
       ) : activeModule === "eett" ? (
         <EETTModule />
+      ) : activeModule === "licitaciones" ? (
+        <LicitacionesModule />
       ) : !selectedSpec ? (
         // Grid especialistas - To Do style
         <div style={{ flex: 1, overflowY: "auto", padding: "32px 40px" }}>
