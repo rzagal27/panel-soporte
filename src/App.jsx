@@ -3392,6 +3392,7 @@ function AgendaModule() {
     border: "#EDEBE9", white: "#FFFFFF", bg: "#FAF9F8", bg2: "#F5F6F8", bg3: "#E9ECF1",
   };
   const [spec, setSpec] = useState(null);
+  const [general, setGeneral] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("dia");          // dia | cal | hist
@@ -3449,6 +3450,12 @@ function AgendaModule() {
     </div>
   );
 
+  // ----- panel general (supervisor) -----
+  if (general) {
+    return <AgendaSupervisor C={C} onBack={() => setGeneral(false)}
+      onOpenSpec={(s) => { setGeneral(false); setSpec(s); setView("dia"); setDay(agToday()); }} />;
+  }
+
   // ----- selector especialista -----
   if (!spec) {
     return shell(
@@ -3456,7 +3463,13 @@ function AgendaModule() {
         <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>AGENDA · O&M SAS06</div>
         <h2 style={{ margin: "0 0 4px", fontSize: 24 }}>Elige tu agenda</h2>
         <p style={{ color: C.muted, fontSize: 13.5, marginTop: 0 }}>Cada especialista trabaja su día; el supervisor puede abrir cualquiera.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12, marginTop: 18 }}>
+        <button onClick={() => setGeneral(true)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", background: C.blue, border: "none", borderRadius: 10, padding: "14px 16px", cursor: "pointer", color: "#fff", marginTop: 16 }}>
+          <span style={{ fontSize: 20 }}>📊</span>
+          <span><b style={{ fontSize: 14 }}>Panel general del equipo</b><span style={{ display: "block", fontSize: 11.5, opacity: 0.85 }}>Supervisor · tareas abiertas de todos los especialistas</span></span>
+          <span style={{ flex: 1 }} /><span style={{ fontSize: 18 }}>›</span>
+        </button>
+        <div style={{ fontSize: 11, color: C.light, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", margin: "20px 0 8px" }}>Agendas individuales</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12 }}>
           {SPECIALISTS.map((s) => (
             <div key={s.id} onClick={() => { setSpec(s); setView("dia"); setDay(agToday()); }}
               style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: 18, cursor: "pointer", textAlign: "center" }}
@@ -3718,6 +3731,82 @@ function AgCalendar({ C, y, m, items, onNav, onPick }) {
         })}
       </div>
       <div style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>El número rojo indica tareas abiertas ese día. Toca un día para abrir su hoja.</div>
+    </div>
+  );
+}
+
+// ── panel general del supervisor ─────────────────────────────────────
+function AgendaSupervisor({ C, onBack, onOpenSpec }) {
+  const team = SPECIALISTS.filter((s) => s.role.indexOf("Supervisor") === -1);
+  const [bySpec, setBySpec] = useState({});
+  useEffect(() => {
+    const unsubs = team.map((s) => onSnapshot(collection(db, "agenda_" + s.id), (snap) => {
+      const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setBySpec((p) => ({ ...p, [s.id]: arr }));
+    }));
+    return () => unsubs.forEach((u) => u());
+  }, []);
+  const today = agToday();
+  const openOf = (id) => (bySpec[id] || []).filter((t) => t.status === "open");
+  const doneTodayOf = (id) => (bySpec[id] || []).filter((t) => t.status === "done" && t.completedDate === today);
+  const totalOpen = team.reduce((a, s) => a + openOf(s.id).length, 0);
+  const totalDone = team.reduce((a, s) => a + doneTodayOf(s.id).length, 0);
+  const tile = (k, v) => (
+    <div style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px" }}>
+      <div style={{ fontSize: 11.5, color: C.muted, fontWeight: 600 }}>{k}</div>
+      <div style={{ fontSize: 25, fontWeight: 800, marginTop: 4 }}>{v}</div>
+    </div>
+  );
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bg, fontFamily: "'Segoe UI', system-ui, sans-serif", color: C.text }}>
+      <div style={{ maxWidth: 1060, margin: "0 auto", padding: "24px 26px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 12.5 }}>← Volver</button>
+        </div>
+        <h2 style={{ margin: "0 0 2px", fontSize: 22 }}>Panel general del equipo</h2>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 16 }}>Tareas abiertas y avance del día · todos los especialistas</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 22 }}>
+          {tile("Abiertas (equipo)", totalOpen)}{tile("Completadas hoy", totalDone)}{tile("Especialistas", team.length)}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
+          {team.map((s) => {
+            const open = openOf(s.id).sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+            const overdue = open.filter((t) => t.date && t.date < today).length;
+            const catCount = {};
+            open.forEach((t) => { catCount[t.category] = (catCount[t.category] || 0) + 1; });
+            return (
+              <div key={s.id} style={{ background: C.white, border: "1px solid " + C.border, borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderBottom: "1px solid " + C.border }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: s.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>{s.avatar}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{s.name}</div>
+                    <div style={{ fontSize: 11.5, color: C.muted }}><b style={{ color: open.length ? C.blue : C.light }}>{open.length}</b> abiertas · {doneTodayOf(s.id).length} hoy{overdue ? <span style={{ color: C.red }}> · {overdue} atrasada{overdue !== 1 ? "s" : ""}</span> : null}</div>
+                  </div>
+                  <button onClick={() => onOpenSpec(s)} style={{ background: C.blueLight, border: "1px solid " + C.border2, color: C.blue, borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Ver agenda</button>
+                </div>
+                {Object.keys(catCount).length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 14px 4px" }}>
+                    {AG_CATS.filter((c) => catCount[c.id]).map((c) => (
+                      <span key={c.id} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 999, background: c.bg, color: c.color }}>{c.name} {catCount[c.id]}</span>
+                    ))}
+                  </div>
+                ) : null}
+                <div style={{ padding: "8px 14px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                  {open.length === 0 ? <div style={{ fontSize: 12.5, color: C.light, padding: "8px 0" }}>Sin tareas abiertas ✓</div> :
+                    open.slice(0, 6).map((t) => (
+                      <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 2, background: AG_CAT(t.category).color, flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+                        {t.rollovers > 0 ? <span style={{ fontSize: 10.5, color: C.red }}>↻{t.rollovers}</span> : null}
+                      </div>
+                    ))}
+                  {open.length > 6 ? <div style={{ fontSize: 11.5, color: C.muted }}>+{open.length - 6} más…</div> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
